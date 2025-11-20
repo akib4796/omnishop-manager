@@ -40,28 +40,28 @@ export default function Dashboard() {
 
   const stats = [
     {
-      title: "Total Sales",
+      title: t("dashboard.totalSales"),
       value: "৳ 0",
       icon: ShoppingCart,
-      description: "This month",
+      description: t("dashboard.thisMonth"),
     },
     {
-      title: "Products",
+      title: t("dashboard.products"),
       value: "0",
       icon: Package,
-      description: "In inventory",
+      description: t("dashboard.inInventory"),
     },
     {
-      title: "Customers",
+      title: t("dashboard.customers"),
       value: "0",
       icon: Users,
-      description: "Total registered",
+      description: t("dashboard.totalRegistered"),
     },
     {
-      title: "Revenue",
+      title: t("dashboard.revenue"),
       value: "৳ 0",
       icon: BarChart3,
-      description: "This month",
+      description: t("dashboard.thisMonth"),
     },
   ];
 
@@ -82,7 +82,7 @@ export default function Dashboard() {
             <div>
               <h2 className="text-3xl font-bold">{t("common.welcome")}, {tenantName}</h2>
               <p className="text-muted-foreground mt-1">
-                Here's what's happening with your business today
+                {t("dashboard.businessToday")}
               </p>
             </div>
 
@@ -110,11 +110,11 @@ export default function Dashboard() {
 
             <Card>
               <CardHeader>
-                <CardTitle>Quick Actions</CardTitle>
+                <CardTitle>{t("dashboard.quickActions")}</CardTitle>
               </CardHeader>
               <CardContent>
                 <p className="text-sm text-muted-foreground">
-                  Your dashboard is ready! Use the sidebar to navigate to different sections.
+                  {t("dashboard.dashboardReady")}
                 </p>
               </CardContent>
             </Card>

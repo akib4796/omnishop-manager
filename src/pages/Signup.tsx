@@ -24,12 +24,12 @@ export default function Signup() {
     e.preventDefault();
 
     if (password !== confirmPassword) {
-      toast.error("Passwords do not match");
+      toast.error(t("auth.passwordsDoNotMatch"));
       return;
     }
 
     if (password.length < 6) {
-      toast.error("Password must be at least 6 characters");
+      toast.error(t("auth.passwordMinLength"));
       return;
     }
 
@@ -51,7 +51,7 @@ export default function Signup() {
       if (error) throw error;
 
       if (data.user) {
-        toast.success("Account created successfully!");
+        toast.success(t("auth.accountCreated"));
         navigate("/setup");
       }
     } catch (error: any) {
@@ -69,7 +69,7 @@ export default function Signup() {
 
       <Card className="w-full max-w-md">
         <CardHeader className="space-y-1 text-center">
-          <CardTitle className="text-3xl font-bold">OmniManager</CardTitle>
+          <CardTitle className="text-3xl font-bold">{t("appName")}</CardTitle>
           <CardDescription>{t("auth.createAccount")}</CardDescription>
         </CardHeader>
         <CardContent>

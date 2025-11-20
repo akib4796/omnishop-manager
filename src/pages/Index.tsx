@@ -23,23 +23,23 @@ const Index = () => {
   const features = [
     {
       icon: Store,
-      title: "Complete POS System",
-      description: "Manage sales, inventory, and customers all in one place",
+      title: t("landing.completePOS"),
+      description: t("landing.completePOSDesc"),
     },
     {
       icon: Sparkles,
-      title: "Multi-tenant Architecture",
-      description: "Secure, isolated data for each business",
+      title: t("landing.multiTenant"),
+      description: t("landing.multiTenantDesc"),
     },
     {
       icon: Shield,
-      title: "Secure & Reliable",
-      description: "Built with enterprise-grade security",
+      title: t("landing.secureReliable"),
+      description: t("landing.secureReliableDesc"),
     },
     {
       icon: Globe,
-      title: "Bilingual Support",
-      description: "Full support for English and বাংলা",
+      title: t("landing.bilingualSupport"),
+      description: t("landing.bilingualSupportDesc"),
     },
   ];
 
@@ -52,10 +52,10 @@ const Index = () => {
       <div className="container mx-auto px-4 py-16">
         <div className="text-center max-w-3xl mx-auto mb-16">
           <h1 className="text-5xl md:text-6xl font-bold mb-6 bg-gradient-to-r from-primary to-accent bg-clip-text text-transparent">
-            OmniManager
+            {t("landing.title")}
           </h1>
           <p className="text-xl text-muted-foreground mb-8">
-            Complete POS & Inventory Management System for Retail, Restaurants & Pharmacies
+            {t("landing.subtitle")}
           </p>
           <div className="flex gap-4 justify-center">
             <Button size="lg" onClick={() => navigate("/signup")}>

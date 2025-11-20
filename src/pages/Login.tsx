@@ -57,7 +57,7 @@ export default function Login() {
 
       <Card className="w-full max-w-md">
         <CardHeader className="space-y-1 text-center">
-          <CardTitle className="text-3xl font-bold">OmniManager</CardTitle>
+          <CardTitle className="text-3xl font-bold">{t("appName")}</CardTitle>
           <CardDescription>{t("auth.signInWithEmail")}</CardDescription>
         </CardHeader>
         <CardContent>
