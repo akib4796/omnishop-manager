@@ -54,7 +54,7 @@ export function AppSidebar() {
   const handleLogout = async () => {
     const { error } = await supabase.auth.signOut();
     if (error) {
-      toast.error("Error logging out");
+      toast.error(t("auth.errorLoggingOut"));
     } else {
       navigate("/login");
     }
@@ -65,7 +65,7 @@ export function AppSidebar() {
       <SidebarContent>
         <SidebarGroup>
           <SidebarGroupLabel className="text-lg font-bold px-4 py-6">
-            {!collapsed && "OmniManager"}
+            {!collapsed && t("appName")}
           </SidebarGroupLabel>
           <SidebarGroupContent>
             <SidebarMenu>

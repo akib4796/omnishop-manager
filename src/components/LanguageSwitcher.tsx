@@ -1,3 +1,4 @@
+import { useEffect } from "react";
 import { Globe } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import {
@@ -11,9 +12,13 @@ import { useTranslation } from "react-i18next";
 export function LanguageSwitcher() {
   const { i18n } = useTranslation();
 
-  const changeLanguage = (lng: string) => {
-    i18n.changeLanguage(lng);
-    // Apply font class to body
+  // Apply font on mount based on current language
+  useEffect(() => {
+    const currentLang = i18n.language || localStorage.getItem('i18nextLng') || 'en';
+    applyFontClass(currentLang);
+  }, []);
+
+  const applyFontClass = (lng: string) => {
     if (lng === 'bn') {
       document.body.classList.add('font-bengali');
       document.body.classList.remove('font-sans');
@@ -21,6 +26,12 @@ export function LanguageSwitcher() {
       document.body.classList.add('font-sans');
       document.body.classList.remove('font-bengali');
     }
+  };
+
+  const changeLanguage = (lng: string) => {
+    i18n.changeLanguage(lng);
+    localStorage.setItem('i18nextLng', lng);
+    applyFontClass(lng);
   };
 
   return (

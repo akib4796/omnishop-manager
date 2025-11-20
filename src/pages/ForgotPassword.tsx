@@ -28,7 +28,7 @@ export default function ForgotPassword() {
       if (error) throw error;
 
       setSent(true);
-      toast.success("Password reset link sent to your email");
+      toast.success(t("auth.resetLinkSent"));
     } catch (error: any) {
       toast.error(error.message || t("common.error"));
     } finally {
@@ -47,8 +47,8 @@ export default function ForgotPassword() {
           <CardTitle className="text-2xl font-bold">{t("auth.resetPassword")}</CardTitle>
           <CardDescription>
             {sent 
-              ? "Check your email for the reset link"
-              : "Enter your email to receive a password reset link"
+              ? t("auth.checkEmail")
+              : t("auth.enterEmailForReset")
             }
           </CardDescription>
         </CardHeader>
@@ -82,7 +82,7 @@ export default function ForgotPassword() {
           ) : (
             <div className="space-y-4">
               <p className="text-center text-sm text-muted-foreground">
-                We've sent a password reset link to <strong>{email}</strong>
+                {t("auth.resetEmailSentTo")} <strong>{email}</strong>
               </p>
               <Link to="/login">
                 <Button variant="outline" className="w-full">

@@ -1,4 +1,5 @@
 {
+  "appName": "OmniManager",
   "auth": {
     "login": "Login",
     "signup": "Sign Up",
@@ -13,9 +14,17 @@
     "dontHaveAccount": "Don't have an account?",
     "alreadyHaveAccount": "Already have an account?",
     "createAccount": "Create Account",
-    "signInWithEmail": "Sign in with email",
+    "signInWithEmail": "Sign in with your email",
     "fullName": "Full Name",
-    "phoneNumber": "Phone Number"
+    "phoneNumber": "Phone Number",
+    "passwordsDoNotMatch": "Passwords do not match",
+    "passwordMinLength": "Password must be at least 6 characters",
+    "accountCreated": "Account created successfully!",
+    "resetLinkSent": "Password reset link sent to your email",
+    "checkEmail": "Check your email for the reset link",
+    "enterEmailForReset": "Enter your email to receive a password reset link",
+    "resetEmailSentTo": "We've sent a password reset link to",
+    "errorLoggingOut": "Error logging out"
   },
   "wizard": {
     "storeSetup": "Store Setup",
@@ -28,7 +37,7 @@
     "businessName": "Business Name",
     "businessType": "Business Type",
     "uploadLogo": "Upload Logo",
-    "retail": "Retail Shop",
+    "retail": "Retail Store",
     "restaurant": "Restaurant",
     "pharmacy": "Pharmacy",
     "locationInfo": "Location & Currency",
@@ -38,7 +47,7 @@
     "preferences": "Preferences",
     "defaultLanguage": "Default Language",
     "english": "English",
-    "bangla": "বাংলা",
+    "bangla": "Bangla",
     "summary": "Summary",
     "reviewInfo": "Review your information",
     "setupComplete": "Setup Complete!"
@@ -54,6 +63,30 @@
     "expenses": "Expenses",
     "staff": "Staff",
     "settings": "Settings"
+  },
+  "dashboard": {
+    "totalSales": "Total Sales",
+    "products": "Products",
+    "customers": "Customers",
+    "revenue": "Revenue",
+    "thisMonth": "This month",
+    "inInventory": "In inventory",
+    "totalRegistered": "Total registered",
+    "quickActions": "Quick Actions",
+    "dashboardReady": "Your dashboard is ready! Use the sidebar to navigate to different sections.",
+    "businessToday": "Here's what's happening with your business today"
+  },
+  "landing": {
+    "title": "OmniManager",
+    "subtitle": "Complete POS & Inventory Management System for Retail, Restaurants & Pharmacies",
+    "completePOS": "Complete POS System",
+    "completePOSDesc": "Manage sales, inventory, and customers all in one place",
+    "multiTenant": "Multi-tenant Architecture",
+    "multiTenantDesc": "Secure, isolated data for each business",
+    "secureReliable": "Secure & Reliable",
+    "secureReliableDesc": "Built with enterprise-grade security",
+    "bilingualSupport": "Bilingual Support",
+    "bilingualSupportDesc": "Full support for English and বাংলা"
   },
   "common": {
     "save": "Save",
@@ -73,6 +106,12 @@
     "action": "Action",
     "status": "Status",
     "active": "Active",
-    "inactive": "Inactive"
+    "inactive": "Inactive",
+    "yes": "Yes",
+    "no": "No",
+    "confirm": "Confirm",
+    "close": "Close",
+    "print": "Print",
+    "share": "Share"
   }
 }

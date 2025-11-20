@@ -18,6 +18,31 @@ i18n
     interpolation: {
       escapeValue: false,
     },
+    detection: {
+      order: ['localStorage', 'navigator'],
+      caches: ['localStorage'],
+    },
   });
+
+// Apply font class based on language
+i18n.on('languageChanged', (lng) => {
+  if (lng === 'bn') {
+    document.body.classList.add('font-bengali');
+    document.body.classList.remove('font-sans');
+  } else {
+    document.body.classList.add('font-sans');
+    document.body.classList.remove('font-bengali');
+  }
+});
+
+// Apply initial font class
+const currentLang = i18n.language;
+if (currentLang === 'bn') {
+  document.body.classList.add('font-bengali');
+  document.body.classList.remove('font-sans');
+} else {
+  document.body.classList.add('font-sans');
+  document.body.classList.remove('font-bengali');
+}
 
 export default i18n;
