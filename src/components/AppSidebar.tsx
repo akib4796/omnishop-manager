@@ -2,6 +2,8 @@ import { useTranslation } from "react-i18next";
 import { NavLink } from "@/components/NavLink";
 import { useLocation, useNavigate } from "react-router-dom";
 import { supabase } from "@/integrations/supabase/client";
+import { SyncIndicator } from "./SyncIndicator";
+import { LanguageSwitcher } from "./LanguageSwitcher";
 import {
   LayoutDashboard,
   ShoppingCart,
@@ -18,6 +20,7 @@ import {
 import {
   Sidebar,
   SidebarContent,
+  SidebarFooter,
   SidebarGroup,
   SidebarGroupContent,
   SidebarGroupLabel,
@@ -40,7 +43,7 @@ export function AppSidebar() {
     { title: t("menu.dashboard"), url: "/dashboard", icon: LayoutDashboard },
     { title: t("menu.pos"), url: "/pos", icon: ShoppingCart },
     { title: t("menu.products"), url: "/products", icon: Package },
-    { title: t("menu.purchases"), url: "/purchases", icon: ShoppingBag },
+    { title: t("menu.purchases"), url: "/inventory", icon: ShoppingBag },
     { title: t("menu.salesHistory"), url: "/sales", icon: History },
     { title: t("menu.reports"), url: "/reports", icon: BarChart3 },
     { title: t("menu.customers"), url: "/customers", icon: Users },
@@ -90,6 +93,16 @@ export function AppSidebar() {
           </SidebarGroupContent>
         </SidebarGroup>
       </SidebarContent>
+      <SidebarFooter>
+        <SidebarMenu>
+          <SidebarMenuItem>
+            <LanguageSwitcher />
+          </SidebarMenuItem>
+        </SidebarMenu>
+        <div className="px-4 py-2">
+          <SyncIndicator />
+        </div>
+      </SidebarFooter>
     </Sidebar>
   );
 }
