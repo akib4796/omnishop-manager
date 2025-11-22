@@ -74,7 +74,52 @@
     "totalRegistered": "মোট নিবন্ধিত",
     "quickActions": "দ্রুত কাজ",
     "dashboardReady": "আপনার ড্যাশবোর্ড প্রস্তুত! বিভিন্ন বিভাগে নেভিগেট করতে সাইডবার ব্যবহার করুন।",
-    "businessToday": "আজ আপনার ব্যবসার সাথে যা ঘটছে"
+    "businessToday": "আজ আপনার ব্যবসার সাথে যা ঘটছে",
+    "pendingOfflineSales": "অপেক্ষমাণ অফলাইন বিক্রয়",
+    "syncStatus": "সিঙ্ক অবস্থা",
+    "lastSynced": "শেষ সিঙ্ক",
+    "syncNow": "এখনই সিঙ্ক করুন",
+    "online": "অনলাইন",
+    "offline": "অফলাইন"
+  },
+  "reports": {
+    "title": "রিপোর্ট",
+    "salesReport": "বিক্রয় রিপোর্ট",
+    "offlineSalesReport": "অফলাইন বিক্রয় রিপোর্ট",
+    "totalSales": "মোট বিক্রয়",
+    "totalRevenue": "মোট রাজস্ব",
+    "totalTransactions": "মোট লেনদেন",
+    "dateRange": "তারিখ পরিসীমা",
+    "from": "থেকে",
+    "to": "পর্যন্ত",
+    "generate": "রিপোর্ট তৈরি করুন",
+    "export": "রপ্তানি",
+    "noData": "কোন তথ্য নেই"
+  },
+  "settings": {
+    "title": "সেটিংস",
+    "offlineMode": "অফলাইন মোড",
+    "enableOfflinePOS": "অফলাইন পিওএস সক্ষম করুন",
+    "offlineModeDesc": "ইন্টারনেট সংযোগ ছাড়াই পিওএস চালাতে অনুমতি দিন",
+    "forceSyncNow": "এখনই সিঙ্ক করুন",
+    "storageUsed": "ব্যবহৃত স্টোরেজ",
+    "clearOfflineData": "অফলাইন ডেটা মুছুন",
+    "dataSynced": "সমস্ত ডেটা সফলভাবে সিঙ্ক হয়েছে",
+    "syncFailed": "সিঙ্ক ব্যর্থ হয়েছে",
+    "general": "সাধারণ",
+    "account": "অ্যাকাউন্ট",
+    "security": "নিরাপত্তা"
+  },
+  "install": {
+    "title": "অমনি ম্যানেজার ইনস্টল করুন",
+    "description": "সেরা অভিজ্ঞতার জন্য আপনার ডিভাইসে অমনি ম্যানেজার ইনস্টল করুন। অফলাইনে কাজ করে!",
+    "install": "অ্যাপ ইনস্টল করুন",
+    "alreadyInstalled": "ইতিমধ্যে ইনস্টল করা হয়েছে",
+    "benefits": "ইনস্টল করার সুবিধা",
+    "benefit1": "সম্পূর্ণ অফলাইনে কাজ করে",
+    "benefit2": "দ্রুত লোডিং",
+    "benefit3": "হোম স্ক্রীন থেকে সহজ অ্যাক্সেস",
+    "benefit4": "উন্নত কর্মক্ষমতা"
   },
   "landing": {
     "title": "অমনি ম্যানেজার",
