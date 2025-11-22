@@ -1,0 +1,6 @@
+<!-- This is a placeholder. In production, replace with actual 192x192 PNG icon -->
+<svg width="192" height="192" xmlns="http://www.w3.org/2000/svg">
+  <rect width="192" height="192" fill="#006A4E"/>
+  <rect x="48" y="48" width="96" height="96" fill="#F42A41" rx="16"/>
+  <text x="96" y="120" font-family="Arial" font-size="48" fill="white" text-anchor="middle">OM</text>
+</svg>

@@ -74,7 +74,52 @@
     "totalRegistered": "Total registered",
     "quickActions": "Quick Actions",
     "dashboardReady": "Your dashboard is ready! Use the sidebar to navigate to different sections.",
-    "businessToday": "Here's what's happening with your business today"
+    "businessToday": "Here's what's happening with your business today",
+    "pendingOfflineSales": "Pending Offline Sales",
+    "syncStatus": "Sync Status",
+    "lastSynced": "Last synced",
+    "syncNow": "Sync Now",
+    "online": "Online",
+    "offline": "Offline"
+  },
+  "reports": {
+    "title": "Reports",
+    "salesReport": "Sales Report",
+    "offlineSalesReport": "Offline Sales Report",
+    "totalSales": "Total Sales",
+    "totalRevenue": "Total Revenue",
+    "totalTransactions": "Total Transactions",
+    "dateRange": "Date Range",
+    "from": "From",
+    "to": "To",
+    "generate": "Generate Report",
+    "export": "Export",
+    "noData": "No data available"
+  },
+  "settings": {
+    "title": "Settings",
+    "offlineMode": "Offline Mode",
+    "enableOfflinePOS": "Enable Offline POS",
+    "offlineModeDesc": "Allow POS to work without internet connection",
+    "forceSyncNow": "Force Sync Now",
+    "storageUsed": "Storage Used",
+    "clearOfflineData": "Clear Offline Data",
+    "dataSynced": "All data synced successfully",
+    "syncFailed": "Sync failed",
+    "general": "General",
+    "account": "Account",
+    "security": "Security"
+  },
+  "install": {
+    "title": "Install OmniManager",
+    "description": "Install OmniManager on your device for the best experience. Works offline!",
+    "install": "Install App",
+    "alreadyInstalled": "Already installed",
+    "benefits": "Benefits of installing",
+    "benefit1": "Works completely offline",
+    "benefit2": "Faster loading",
+    "benefit3": "Easy access from home screen",
+    "benefit4": "Better performance"
   },
   "landing": {
     "title": "OmniManager",

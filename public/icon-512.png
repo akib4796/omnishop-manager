@@ -1,0 +1,6 @@
+<!-- This is a placeholder. In production, replace with actual 512x512 PNG icon -->
+<svg width="512" height="512" xmlns="http://www.w3.org/2000/svg">
+  <rect width="512" height="512" fill="#006A4E"/>
+  <circle cx="256" cy="256" r="180" fill="#F42A41"/>
+  <text x="256" y="300" font-family="Arial" font-size="128" fill="white" text-anchor="middle" font-weight="bold">OM</text>
+</svg>
