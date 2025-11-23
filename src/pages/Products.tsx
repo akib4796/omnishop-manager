@@ -10,6 +10,7 @@ import { Plus, Search, Download, Upload, Pencil, Trash2 } from "lucide-react";
 import { toast } from "sonner";
 import { ProductDialog } from "@/components/products/ProductDialog";
 import { ProductsTable } from "@/components/products/ProductsTable";
+import { CategoryQuickAdd } from "@/components/products/CategoryQuickAdd";
 import {
   Select,
   SelectContent,
@@ -176,19 +177,22 @@ export default function Products() {
                 className="pl-10"
               />
             </div>
-            <Select value={selectedCategory} onValueChange={setSelectedCategory}>
-              <SelectTrigger className="w-[200px]">
-                <SelectValue placeholder={t("products.selectCategory")} />
-              </SelectTrigger>
-              <SelectContent>
-                <SelectItem value="all">{t("products.allCategories")}</SelectItem>
-                {categories?.map((cat) => (
-                  <SelectItem key={cat.id} value={cat.id}>
-                    {cat.name}
-                  </SelectItem>
-                ))}
-              </SelectContent>
-            </Select>
+            <div className="flex gap-2">
+              <Select value={selectedCategory} onValueChange={setSelectedCategory}>
+                <SelectTrigger className="w-[200px]">
+                  <SelectValue placeholder={t("products.selectCategory")} />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="all">{t("products.allCategories")}</SelectItem>
+                  {categories?.map((cat) => (
+                    <SelectItem key={cat.id} value={cat.id}>
+                      {cat.name}
+                    </SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+              <CategoryQuickAdd />
+            </div>
           </div>
 
           {productsLoading ? (
