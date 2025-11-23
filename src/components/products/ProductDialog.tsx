@@ -30,6 +30,7 @@ import {
 } from "@/components/ui/select";
 import { Checkbox } from "@/components/ui/checkbox";
 import { useEffect } from "react";
+import { ImageUpload } from "./ImageUpload";
 
 const productSchema = z.object({
   name: z.string().min(1, "Product name is required"),
@@ -325,10 +326,13 @@ export function ProductDialog({
                 control={form.control}
                 name="image_url"
                 render={({ field }) => (
-                  <FormItem>
-                    <FormLabel>{t("products.imageUrl")}</FormLabel>
+                  <FormItem className="col-span-2">
+                    <FormLabel>{t("products.productImage")}</FormLabel>
                     <FormControl>
-                      <Input {...field} />
+                      <ImageUpload
+                        value={field.value}
+                        onChange={field.onChange}
+                      />
                     </FormControl>
                     <FormMessage />
                   </FormItem>

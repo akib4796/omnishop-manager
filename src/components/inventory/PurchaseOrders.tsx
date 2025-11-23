@@ -7,6 +7,7 @@ import { Plus } from "lucide-react";
 import { toast } from "sonner";
 import { PurchaseOrderDialog } from "./PurchaseOrderDialog";
 import { PurchaseOrdersTable } from "./PurchaseOrdersTable";
+import { SupplierQuickAdd } from "./SupplierQuickAdd";
 
 export function PurchaseOrders() {
   const { t } = useTranslation();
@@ -88,15 +89,18 @@ export function PurchaseOrders() {
     <div className="space-y-4">
       <div className="flex justify-between items-center">
         <h2 className="text-xl font-semibold">{t("inventory.purchaseOrders")}</h2>
-        <Button
-          onClick={() => {
-            setEditingOrder(null);
-            setIsDialogOpen(true);
-          }}
-        >
-          <Plus className="h-4 w-4 mr-2" />
-          {t("inventory.createPurchaseOrder")}
-        </Button>
+        <div className="flex gap-2">
+          <SupplierQuickAdd />
+          <Button
+            onClick={() => {
+              setEditingOrder(null);
+              setIsDialogOpen(true);
+            }}
+          >
+            <Plus className="h-4 w-4 mr-2" />
+            {t("inventory.createPurchaseOrder")}
+          </Button>
+        </div>
       </div>
 
       {isLoading ? (

@@ -18,6 +18,10 @@ import Reports from "./pages/Reports";
 import Settings from "./pages/Settings";
 import Install from "./pages/Install";
 import NotFound from "./pages/NotFound";
+import SalesHistory from "./pages/SalesHistory";
+import Customers from "./pages/Customers";
+import Expenses from "./pages/Expenses";
+import Staff from "./pages/Staff";
 
 const queryClient = new QueryClient();
 
@@ -38,6 +42,10 @@ const App = () => (
             <Route path="/products" element={<ProtectedRoute><Products /></ProtectedRoute>} />
             <Route path="/inventory" element={<ProtectedRoute><Inventory /></ProtectedRoute>} />
             <Route path="/pos" element={<ProtectedRoute><POS /></ProtectedRoute>} />
+            <Route path="/sales-history" element={<ProtectedRoute><SalesHistory /></ProtectedRoute>} />
+            <Route path="/customers" element={<ProtectedRoute><Customers /></ProtectedRoute>} />
+            <Route path="/expenses" element={<ProtectedRoute><Expenses /></ProtectedRoute>} />
+            <Route path="/staff" element={<ProtectedRoute><Staff /></ProtectedRoute>} />
             <Route path="/reports" element={<ProtectedRoute><Reports /></ProtectedRoute>} />
             <Route path="/settings" element={<ProtectedRoute><Settings /></ProtectedRoute>} />
             <Route path="/install" element={<Install />} />

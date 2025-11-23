@@ -44,7 +44,7 @@ export function AppSidebar() {
     { title: t("menu.pos"), url: "/pos", icon: ShoppingCart },
     { title: t("menu.products"), url: "/products", icon: Package },
     { title: t("menu.purchases"), url: "/inventory", icon: ShoppingBag },
-    { title: t("menu.salesHistory"), url: "/sales", icon: History },
+    { title: t("menu.salesHistory"), url: "/sales-history", icon: History },
     { title: t("menu.reports"), url: "/reports", icon: BarChart3 },
     { title: t("menu.customers"), url: "/customers", icon: Users },
     { title: t("menu.expenses"), url: "/expenses", icon: Receipt },
