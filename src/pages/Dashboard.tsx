@@ -12,6 +12,7 @@ import { getPendingSales } from "@/lib/offline-db";
 import { syncManager } from "@/lib/sync-manager";
 import { toBengaliNumerals } from "@/lib/i18n-utils";
 import { toast } from "sonner";
+import { seedTestData } from "@/lib/seed-data";
 
 export default function Dashboard() {
   const { t, i18n } = useTranslation();
@@ -25,6 +26,9 @@ export default function Dashboard() {
 
   useEffect(() => {
     fetchDashboardData();
+    
+    // Seed test data on first load
+    seedTestData();
 
     const handleOnline = () => {
       setIsOnline(true);

@@ -385,5 +385,18 @@
     "imageTooLarge": "Image must be less than 5MB",
     "imageUploaded": "Image uploaded successfully",
     "imageUploadError": "Failed to upload image"
+  },
+  "salesHistory": {
+    "title": "Sales History",
+    "searchPlaceholder": "Search by customer or sale ID",
+    "saleId": "Sale ID",
+    "paymentMethod": "Payment Method",
+    "cashier": "Cashier",
+    "noSales": "No sales found",
+    "cash": "Cash",
+    "card": "Card",
+    "bkash": "bKash",
+    "nagad": "Nagad",
+    "mobileBanking": "Mobile Banking"
   }
 }
