@@ -9,9 +9,11 @@ export async function seedTestData() {
       .limit(1);
 
     if (existingProducts && existingProducts.length > 0) {
-      console.log("Test data already exists");
+      console.log("✅ Test data already exists");
       return;
     }
+
+    console.log("🌱 Seeding test data...");
 
     const { data: userData } = await supabase.auth.getUser();
     if (!userData.user) return;
@@ -454,7 +456,14 @@ export async function seedTestData() {
     await supabase.from("sales").insert(salesData);
 
     console.log("✅ Test data seeded successfully!");
+    console.log("📊 Created:");
+    console.log("  - 5 categories");
+    console.log("  - 20 products");
+    console.log("  - 3 suppliers");
+    console.log("  - 10 customers");
+    console.log("  - 5 expenses");
+    console.log("  - 50 sales transactions");
   } catch (error) {
-    console.error("Error seeding test data:", error);
+    console.error("❌ Error seeding test data:", error);
   }
 }

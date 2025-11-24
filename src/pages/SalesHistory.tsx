@@ -143,7 +143,11 @@ export default function SalesHistory() {
                         {formatCurrency(sale.total_amount, i18n.language)}
                       </TableCell>
                       <TableCell>
-                        {t(`salesHistory.${sale.payment_method}`)}
+                        {sale.payment_method === "cash" && t("salesHistory.cash")}
+                        {sale.payment_method === "card" && t("salesHistory.card")}
+                        {sale.payment_method === "bkash" && t("salesHistory.bkash")}
+                        {sale.payment_method === "nagad" && t("salesHistory.nagad")}
+                        {!["cash", "card", "bkash", "nagad"].includes(sale.payment_method) && sale.payment_method}
                       </TableCell>
                       <TableCell>{sale.profiles?.full_name || "N/A"}</TableCell>
                       <TableCell>
@@ -186,7 +190,13 @@ export default function SalesHistory() {
                     </div>
                     <div className="flex justify-between">
                       <span>{t("salesHistory.paymentMethod")}:</span>
-                      <span>{t(`salesHistory.${selectedSale.payment_method}`)}</span>
+                      <span>
+                        {selectedSale.payment_method === "cash" && t("salesHistory.cash")}
+                        {selectedSale.payment_method === "card" && t("salesHistory.card")}
+                        {selectedSale.payment_method === "bkash" && t("salesHistory.bkash")}
+                        {selectedSale.payment_method === "nagad" && t("salesHistory.nagad")}
+                        {!["cash", "card", "bkash", "nagad"].includes(selectedSale.payment_method) && selectedSale.payment_method}
+                      </span>
                     </div>
                   </div>
                   <div className="border-t pt-4">
