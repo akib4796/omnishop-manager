@@ -26,27 +26,34 @@ export function CategoryQuickAdd() {
 
   const addCategoryMutation = useMutation({
     mutationFn: async (data: { name: string; color: string }) => {
-      const { data: profile } = await supabase.auth.getUser();
-      const { data: tenant } = await supabase
+      const { data: userData, error: authError } = await supabase.auth.getUser();
+      if (authError || !userData.user) throw new Error("Not authenticated");
+
+      const { data: profile, error: profileError } = await supabase
         .from("profiles")
         .select("tenant_id")
-        .eq("id", profile.user?.id)
+        .eq("id", userData.user.id)
         .single();
 
+      if (profileError || !profile?.tenant_id) throw new Error("No tenant found");
+
       const { error } = await supabase.from("categories").insert({
-        ...data,
-        tenant_id: tenant?.tenant_id,
+        name: data.name,
+        color: data.color,
+        tenant_id: profile.tenant_id,
       });
+      
       if (error) throw error;
     },
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ["categories"] });
-      toast.success(t("categories.categoryAdded"));
+      toast.success(t("products.categoryAdded"));
       setIsOpen(false);
       setFormData({ name: "", color: "#3B82F6" });
     },
-    onError: () => {
-      toast.error(t("common.error"));
+    onError: (error: Error) => {
+      console.error("Category add error:", error);
+      toast.error(t("common.error") + ": " + error.message);
     },
   });
 

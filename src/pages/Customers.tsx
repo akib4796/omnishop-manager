@@ -59,35 +59,49 @@ export default function Customers() {
 
   const saveCustomerMutation = useMutation({
     mutationFn: async (data: any) => {
-      const { data: profile } = await supabase.auth.getUser();
-      const { data: tenant } = await supabase
+      const { data: userData, error: authError } = await supabase.auth.getUser();
+      if (authError || !userData.user) throw new Error("Not authenticated");
+
+      const { data: profile, error: profileError } = await supabase
         .from("profiles")
         .select("tenant_id")
-        .eq("id", profile.user?.id)
+        .eq("id", userData.user.id)
         .single();
+
+      if (profileError || !profile?.tenant_id) throw new Error("No tenant found");
 
       if (editingCustomer) {
         const { error } = await supabase
           .from("customers")
-          .update(data)
+          .update({
+            name: data.name,
+            phone: data.phone || null,
+            email: data.email || null,
+          })
           .eq("id", editingCustomer.id);
         if (error) throw error;
       } else {
         const { error } = await supabase
           .from("customers")
-          .insert({ ...data, tenant_id: tenant?.tenant_id });
+          .insert({
+            name: data.name,
+            phone: data.phone || null,
+            email: data.email || null,
+            tenant_id: profile.tenant_id,
+          });
         if (error) throw error;
       }
     },
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ["customers"] });
-      toast.success(t(editingCustomer ? "customers.updated" : "customers.added"));
+      toast.success(t(editingCustomer ? "customers.customerUpdated" : "customers.customerAdded"));
       setIsDialogOpen(false);
       setFormData({ name: "", phone: "", email: "" });
       setEditingCustomer(null);
     },
-    onError: () => {
-      toast.error(t("common.error"));
+    onError: (error: Error) => {
+      console.error("Customer save error:", error);
+      toast.error(t("common.error") + ": " + error.message);
     },
   });
 

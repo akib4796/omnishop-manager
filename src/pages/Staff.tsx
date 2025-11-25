@@ -66,18 +66,23 @@ export default function Staff() {
 
   const inviteStaffMutation = useMutation({
     mutationFn: async (data: { email: string; full_name: string; role: string }) => {
-      // In a real app, this would send a magic link invitation
-      // For now, we'll show a success message
-      console.log("Inviting staff:", data);
+      // Note: Real magic link invitations require Supabase Admin API
+      // which needs to be implemented in an edge function
+      // For now, showing informative message to user
+      console.log("Staff invite would be sent to:", data.email);
+      
+      // Simulate success
+      return new Promise((resolve) => setTimeout(resolve, 1000));
     },
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ["staff"] });
-      toast.success(t("staff.inviteSent"));
+      toast.info(t("staff.inviteNote"));
       setIsDialogOpen(false);
       setFormData({ email: "", full_name: "", role: "staff" });
     },
-    onError: () => {
-      toast.error(t("common.error"));
+    onError: (error: Error) => {
+      console.error("Invite error:", error);
+      toast.error(t("common.error") + ": " + error.message);
     },
   });
 

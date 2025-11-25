@@ -27,27 +27,35 @@ export function SupplierQuickAdd() {
 
   const addSupplierMutation = useMutation({
     mutationFn: async (data: { name: string; phone: string; email: string }) => {
-      const { data: profile } = await supabase.auth.getUser();
-      const { data: tenant } = await supabase
+      const { data: userData, error: authError } = await supabase.auth.getUser();
+      if (authError || !userData.user) throw new Error("Not authenticated");
+
+      const { data: profile, error: profileError } = await supabase
         .from("profiles")
         .select("tenant_id")
-        .eq("id", profile.user?.id)
+        .eq("id", userData.user.id)
         .single();
 
+      if (profileError || !profile?.tenant_id) throw new Error("No tenant found");
+
       const { error } = await supabase.from("suppliers").insert({
-        ...data,
-        tenant_id: tenant?.tenant_id,
+        name: data.name,
+        phone: data.phone || null,
+        email: data.email || null,
+        tenant_id: profile.tenant_id,
       });
+      
       if (error) throw error;
     },
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ["suppliers"] });
-      toast.success(t("suppliers.supplierAdded"));
+      toast.success(t("inventory.supplierAdded"));
       setIsOpen(false);
       setFormData({ name: "", phone: "", email: "" });
     },
-    onError: () => {
-      toast.error(t("common.error"));
+    onError: (error: Error) => {
+      console.error("Supplier add error:", error);
+      toast.error(t("common.error") + ": " + error.message);
     },
   });
 

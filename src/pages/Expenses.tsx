@@ -54,23 +54,31 @@ export default function Expenses() {
 
   const addExpenseMutation = useMutation({
     mutationFn: async (data: any) => {
-      const { data: profile } = await supabase.auth.getUser();
-      const { data: tenant } = await supabase
+      const { data: userData, error: authError } = await supabase.auth.getUser();
+      if (authError || !userData.user) throw new Error("Not authenticated");
+
+      const { data: profile, error: profileError } = await supabase
         .from("profiles")
         .select("tenant_id")
-        .eq("id", profile.user?.id)
+        .eq("id", userData.user.id)
         .single();
 
+      if (profileError || !profile?.tenant_id) throw new Error("No tenant found");
+
       const { error } = await supabase.from("expenses").insert({
-        ...data,
-        tenant_id: tenant?.tenant_id,
-        created_by: profile.user?.id,
+        category: data.category,
+        amount: parseFloat(data.amount),
+        date: data.date,
+        note: data.note || null,
+        tenant_id: profile.tenant_id,
+        created_by: userData.user.id,
       });
+      
       if (error) throw error;
     },
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ["expenses"] });
-      toast.success(t("expenses.added"));
+      toast.success(t("expenses.expenseAdded"));
       setIsDialogOpen(false);
       setFormData({
         category: "",
@@ -79,8 +87,9 @@ export default function Expenses() {
         date: format(new Date(), "yyyy-MM-dd"),
       });
     },
-    onError: () => {
-      toast.error(t("common.error"));
+    onError: (error: Error) => {
+      console.error("Expense add error:", error);
+      toast.error(t("common.error") + ": " + error.message);
     },
   });
 
