@@ -63,10 +63,10 @@ export function ProductsTable({ products, onEdit, onDelete }: ProductsTableProps
                   </span>
                 </TableCell>
                 <TableCell className="text-right">
-                  {formatCurrency(product.purchase_price, i18n.language, "BDT")}
+                  {formatCurrency(product.purchase_price, "BDT", i18n.language)}
                 </TableCell>
                 <TableCell className="text-right">
-                  {formatCurrency(product.selling_price, i18n.language, "BDT")}
+                  {formatCurrency(product.selling_price, "BDT", i18n.language)}
                 </TableCell>
                 <TableCell className="text-right">
                   <div className="flex justify-end gap-2">
