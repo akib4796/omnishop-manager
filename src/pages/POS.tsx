@@ -11,6 +11,10 @@ import { toBengaliNumerals } from "@/lib/i18n-utils";
 import ProductGrid from "@/components/pos/ProductGrid";
 import Cart from "@/components/pos/Cart";
 import PaymentPanel from "@/components/pos/PaymentPanel";
+import { MobileCartBar } from "@/components/pos/MobileCartBar";
+import { MobileCartDrawer } from "@/components/pos/MobileCartDrawer";
+import { MobilePaymentModal } from "@/components/pos/MobilePaymentModal";
+import { SuccessScreen } from "@/components/pos/SuccessScreen";
 
 export default function POS() {
   const { t, i18n } = useTranslation();
@@ -184,34 +188,131 @@ export default function POS() {
     );
   }
 
-  return (
-    <div className="flex flex-col h-screen">
-      {/* Online/Offline Banner */}
-      <div className={`px-4 py-2 text-center text-sm font-medium ${
-        isOnline 
-          ? "bg-success text-success-foreground" 
-          : "bg-destructive text-destructive-foreground"
-      }`}>
-        {isOnline ? (
-          <div className="flex items-center justify-center gap-2">
-            <Wifi className="h-4 w-4" />
-            {t("pos.onlineBanner")}
-          </div>
-        ) : (
-          <div className="flex items-center justify-center gap-2">
-            <WifiOff className="h-4 w-4" />
-            {t("pos.offlineBanner")}
-            {pendingSalesCount > 0 && (
-              <span className="ml-2">• {t("pos.offlineSalesCount", { count: pendingSalesCount })}</span>
-            )}
-          </div>
-        )}
-      </div>
+  const [showPaymentModal, setShowPaymentModal] = useState(false);
+  const [showCartDrawer, setShowCartDrawer] = useState(false);
+  const [showSuccessScreen, setShowSuccessScreen] = useState(false);
+  const [processing, setProcessing] = useState(false);
 
-      {/* Main POS Layout */}
-      <div className="flex-1 grid grid-cols-1 lg:grid-cols-12 gap-4 p-4 overflow-hidden">
-        {/* Left: Products Grid */}
-        <div className="lg:col-span-5 flex flex-col overflow-hidden">
+  const handlePayment = async (paymentMethod: string) => {
+    if (cart.length === 0 || processing) return;
+
+    setProcessing(true);
+
+    try {
+      const { data: { user } } = await supabase.auth.getUser();
+      if (!user) throw new Error("Not authenticated");
+
+      const { data: profile } = await supabase
+        .from('profiles')
+        .select('tenant_id')
+        .eq('id', user.id)
+        .single();
+
+      if (!profile) throw new Error("Profile not found");
+
+      const saleData = {
+        tenant_id: profile.tenant_id,
+        customer_id: selectedCustomer?.id || null,
+        items: cart.map(item => ({
+          product_id: item.product_id,
+          quantity: item.quantity,
+          price: item.price,
+        })),
+        subtotal,
+        discount,
+        tax: taxAmount,
+        total,
+        payment_method: paymentMethod,
+        notes,
+        cashier_id: user.id,
+        completed_at: new Date().toISOString(),
+      };
+
+      if (isOnline) {
+        const saleId = crypto.randomUUID();
+        
+        const { error } = await supabase
+          .from('pending_sales')
+          .insert({
+            id: saleId,
+            tenant_id: profile.tenant_id,
+            sale_data: saleData,
+            synced: true,
+            synced_at: new Date().toISOString(),
+          });
+
+        if (error) throw error;
+
+        for (const item of cart) {
+          const { data: product } = await supabase
+            .from('products')
+            .select('current_stock')
+            .eq('id', item.product_id)
+            .single();
+
+          if (product) {
+            await supabase
+              .from('products')
+              .update({ current_stock: product.current_stock - item.quantity })
+              .eq('id', item.product_id);
+          }
+        }
+      } else {
+        const saleId = crypto.randomUUID();
+        
+        await import("@/lib/offline-db").then(m => m.savePendingSale({
+          id: saleId,
+          tenant_id: profile.tenant_id,
+          sale_data: saleData,
+          created_at: new Date().toISOString(),
+        }));
+
+        for (const item of cart) {
+          await syncManager.decrementStockLocally(item.product_id, item.quantity);
+        }
+
+        toast.info(t("pos.willSyncLater"));
+        await loadPendingSalesCount();
+      }
+
+      setShowPaymentModal(false);
+      setShowSuccessScreen(true);
+      clearCart();
+    } catch (error) {
+      console.error("Payment error:", error);
+      toast.error("Error processing payment");
+    } finally {
+      setProcessing(false);
+    }
+  };
+
+  return (
+    <>
+      <div className="flex flex-col h-screen md:h-auto">
+        {/* Online/Offline Banner */}
+        <div className={`px-4 py-2 text-center text-sm md:text-base font-medium ${
+          isOnline 
+            ? "bg-success text-success-foreground" 
+            : "bg-destructive text-destructive-foreground"
+        }`}>
+          {isOnline ? (
+            <div className="flex items-center justify-center gap-2">
+              <Wifi className="h-4 w-4" />
+              {t("pos.onlineBanner")}
+            </div>
+          ) : (
+            <div className="flex items-center justify-center gap-2">
+              <WifiOff className="h-4 w-4" />
+              {t("pos.offlineBanner")}
+              {pendingSalesCount > 0 && (
+                <span className="ml-2">• {t("pos.offlineSalesCount", { count: pendingSalesCount })}</span>
+              )}
+            </div>
+          )}
+        </div>
+
+        {/* Mobile Layout */}
+        <div className="md:hidden flex-1 overflow-hidden pb-32">
           <ProductGrid 
             products={products}
             categories={categories}
@@ -219,67 +320,112 @@ export default function POS() {
           />
         </div>
 
-        {/* Center: Cart */}
-        <div className="lg:col-span-4 flex flex-col overflow-hidden">
-          <Card className="flex-1 flex flex-col">
-            <div className="p-4 border-b flex items-center justify-between">
-              <div className="flex items-center gap-2">
-                <ShoppingCart className="h-5 w-5" />
-                <h2 className="text-lg font-semibold">{t("pos.cart")}</h2>
+        {/* Desktop Layout */}
+        <div className="hidden md:flex flex-1 grid grid-cols-1 lg:grid-cols-12 gap-4 p-4 overflow-hidden">
+          <div className="lg:col-span-5 flex flex-col overflow-hidden">
+            <ProductGrid 
+              products={products}
+              categories={categories}
+              onProductClick={addToCart}
+            />
+          </div>
+
+          <div className="lg:col-span-4 flex flex-col overflow-hidden">
+            <Card className="flex-1 flex flex-col">
+              <div className="p-4 border-b flex items-center justify-between">
+                <div className="flex items-center gap-2">
+                  <ShoppingCart className="h-5 w-5" />
+                  <h2 className="text-lg font-semibold">{t("pos.cart")}</h2>
+                </div>
+                {heldOrders.length > 0 && (
+                  <Button
+                    variant="outline"
+                    size="sm"
+                    onClick={() => {}}
+                  >
+                    <Clock className="h-4 w-4 mr-2" />
+                    {heldOrders.length}
+                  </Button>
+                )}
               </div>
-              {heldOrders.length > 0 && (
+              
+              <Cart
+                items={cart}
+                onUpdateQty={updateCartItemQty}
+                notes={notes}
+                onNotesChange={setNotes}
+              />
+
+              <div className="p-4 border-t">
                 <Button
                   variant="outline"
-                  size="sm"
-                  onClick={() => {
-                    // Show held orders dialog
-                  }}
+                  className="w-full"
+                  onClick={holdOrder}
+                  disabled={cart.length === 0}
                 >
-                  <Clock className="h-4 w-4 mr-2" />
-                  {heldOrders.length}
+                  {t("pos.holdOrder")}
                 </Button>
-              )}
-            </div>
-            
-            <Cart
-              items={cart}
-              onUpdateQty={updateCartItemQty}
+              </div>
+            </Card>
+          </div>
+
+          <div className="lg:col-span-3 flex flex-col overflow-hidden">
+            <PaymentPanel
+              customers={customers}
+              selectedCustomer={selectedCustomer}
+              onSelectCustomer={setSelectedCustomer}
+              subtotal={subtotal}
+              discount={discount}
+              onDiscountChange={setDiscount}
+              tax={taxAmount}
+              total={total}
+              cart={cart}
               notes={notes}
-              onNotesChange={setNotes}
+              isOnline={isOnline}
+              onSaleComplete={clearCart}
+              onLoadPendingSales={loadPendingSalesCount}
             />
-
-            <div className="p-4 border-t">
-              <Button
-                variant="outline"
-                className="w-full"
-                onClick={holdOrder}
-                disabled={cart.length === 0}
-              >
-                {t("pos.holdOrder")}
-              </Button>
-            </div>
-          </Card>
-        </div>
-
-        {/* Right: Payment */}
-        <div className="lg:col-span-3 flex flex-col overflow-hidden">
-          <PaymentPanel
-            customers={customers}
-            selectedCustomer={selectedCustomer}
-            onSelectCustomer={setSelectedCustomer}
-            subtotal={subtotal}
-            discount={discount}
-            onDiscountChange={setDiscount}
-            tax={taxAmount}
-            total={total}
-            cart={cart}
-            notes={notes}
-            isOnline={isOnline}
-            onSaleComplete={clearCart}
-            onLoadPendingSales={loadPendingSalesCount}
-          />
+          </div>
         </div>
       </div>
-    </div>
+
+      {/* Mobile Components */}
+      <MobileCartBar
+        itemCount={cart.length}
+        total={total}
+        onCheckout={() => setShowPaymentModal(true)}
+        onViewCart={() => setShowCartDrawer(true)}
+      />
+
+      <MobileCartDrawer
+        open={showCartDrawer}
+        onClose={() => setShowCartDrawer(false)}
+        items={cart}
+        onUpdateQty={updateCartItemQty}
+        notes={notes}
+        onNotesChange={setNotes}
+      />
+
+      <MobilePaymentModal
+        open={showPaymentModal}
+        onClose={() => setShowPaymentModal(false)}
+        customers={customers}
+        selectedCustomer={selectedCustomer}
+        onSelectCustomer={setSelectedCustomer}
+        subtotal={subtotal}
+        discount={discount}
+        onDiscountChange={setDiscount}
+        tax={taxAmount}
+        total={total}
+        onPayment={handlePayment}
+        processing={processing}
+      />
+
+      <SuccessScreen
+        open={showSuccessScreen}
+        onClose={() => setShowSuccessScreen(false)}
+        total={total}
+      />
+    </>
   );
 }
