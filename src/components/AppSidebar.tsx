@@ -64,7 +64,7 @@ export function AppSidebar() {
   };
 
   return (
-    <Sidebar collapsible="icon" className="hidden md:flex border-r">
+    <Sidebar collapsible="icon" className="border-r">
       <SidebarContent>
         <SidebarGroup>
           <SidebarGroupLabel className="text-lg font-bold px-4 py-6">
