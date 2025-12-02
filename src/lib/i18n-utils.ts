@@ -6,10 +6,13 @@ export const toBengaliNumerals = (num: number | string): string => {
 };
 
 export const formatCurrency = (amount: number, currency: string = 'BDT', language: string = 'en'): string => {
+  // Handle undefined, null, or non-numeric values
+  const numAmount = Number(amount) || 0;
+  
   if (language === 'bn') {
-    return `৳ ${toBengaliNumerals(amount.toFixed(2))}`;
+    return `৳ ${toBengaliNumerals(numAmount.toFixed(2))}`;
   }
-  return `৳ ${amount.toFixed(2)}`;
+  return `৳ ${numAmount.toFixed(2)}`;
 };
 
 export const formatDate = (date: Date | string, language: string = 'en'): string => {
