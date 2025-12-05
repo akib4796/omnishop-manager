@@ -2,17 +2,16 @@ import { useEffect, useState } from "react";
 import { useTranslation } from "react-i18next";
 import { supabase } from "@/integrations/supabase/client";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
-import { SidebarProvider, SidebarTrigger } from "@/components/ui/sidebar";
-import { AppSidebar } from "@/components/AppSidebar";
-import { LanguageSwitcher } from "@/components/LanguageSwitcher";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
-import { BarChart3, Package, ShoppingCart, Users, Wifi, WifiOff, RefreshCw, AlertCircle } from "lucide-react";
+import { ResponsiveLayout } from "@/components/layout/ResponsiveLayout";
+import { BarChart3, Package, ShoppingCart, Users, Wifi, WifiOff, RefreshCw, AlertCircle, CheckCircle } from "lucide-react";
 import { getPendingSales } from "@/lib/offline-db";
 import { syncManager } from "@/lib/sync-manager";
 import { toBengaliNumerals } from "@/lib/i18n-utils";
 import { toast } from "sonner";
 import { seedTestData } from "@/lib/seed-data";
+import { cn } from "@/lib/utils";
 
 export default function Dashboard() {
   const { t, i18n } = useTranslation();
@@ -23,11 +22,10 @@ export default function Dashboard() {
   const [lastSyncTime, setLastSyncTime] = useState<Date | null>(null);
   const [productsCount, setProductsCount] = useState(0);
   const [customersCount, setCustomersCount] = useState(0);
+  const [showBanner, setShowBanner] = useState(true);
 
   useEffect(() => {
     fetchDashboardData();
-    
-    // Seed test data on first load
     seedTestData();
 
     const handleOnline = () => {
@@ -39,14 +37,12 @@ export default function Dashboard() {
     window.addEventListener("online", handleOnline);
     window.addEventListener("offline", handleOffline);
 
-    // Auto-sync every 30 seconds when online
     const syncInterval = setInterval(() => {
       if (navigator.onLine) {
         syncManager.syncAll();
       }
     }, 30000);
 
-    // Set up sync callback
     const unsubscribe = syncManager.onSyncStatusChange((status) => {
       if (status === 'syncing') {
         setSyncing(true);
@@ -89,7 +85,6 @@ export default function Dashboard() {
           setTenantName(tenant.business_name);
         }
 
-        // Fetch products count
         const { count: productsCount } = await supabase
           .from("products")
           .select("*", { count: 'exact', head: true })
@@ -97,7 +92,6 @@ export default function Dashboard() {
 
         setProductsCount(productsCount || 0);
 
-        // Fetch customers count
         const { count: customersCount } = await supabase
           .from("customers")
           .select("*", { count: 'exact', head: true })
@@ -148,134 +142,166 @@ export default function Dashboard() {
       value: "৳ 0",
       icon: ShoppingCart,
       description: t("dashboard.thisMonth"),
+      color: "text-primary",
     },
     {
       title: t("dashboard.products"),
       value: formatCount(productsCount),
       icon: Package,
       description: t("dashboard.inInventory"),
+      color: "text-success",
     },
     {
       title: t("dashboard.customers"),
       value: formatCount(customersCount),
       icon: Users,
       description: t("dashboard.totalRegistered"),
+      color: "text-accent",
     },
     {
       title: t("dashboard.revenue"),
       value: "৳ 0",
       icon: BarChart3,
       description: t("dashboard.thisMonth"),
+      color: "text-warning",
     },
   ];
 
   return (
-    <SidebarProvider>
-      <div className="min-h-screen flex w-full">
-        <AppSidebar />
-        <main className="flex-1 flex flex-col">
-          <header className="sticky top-0 z-10 flex h-16 items-center gap-4 border-b bg-background px-6">
-            <SidebarTrigger />
-            <div className="flex-1">
-              <h1 className="text-xl font-semibold">{t("menu.dashboard")}</h1>
-            </div>
-            <LanguageSwitcher />
-          </header>
-
-          <div className="flex-1 p-6 space-y-6">
-            <div>
-              <h2 className="text-3xl font-bold">{t("common.welcome")}, {tenantName}</h2>
-              <p className="text-muted-foreground mt-1">
-                {t("dashboard.businessToday")}
-              </p>
-            </div>
-
-            {/* Sync Status Card */}
-            <Card className={isOnline ? "border-success" : "border-destructive"}>
-              <CardContent className="pt-6">
-                <div className="flex items-center justify-between">
-                  <div className="flex items-center gap-3">
-                    {isOnline ? (
-                      <Wifi className="h-5 w-5 text-success" />
-                    ) : (
-                      <WifiOff className="h-5 w-5 text-destructive" />
-                    )}
-                    <div>
-                      <p className="font-medium">
-                        {t(isOnline ? "dashboard.online" : "dashboard.offline")}
-                      </p>
-                      <p className="text-sm text-muted-foreground">
-                        {t("dashboard.lastSynced")}: {formatTime()}
-                      </p>
-                    </div>
-                  </div>
-                  <Button
-                    size="sm"
-                    onClick={handleForceSync}
-                    disabled={syncing || !isOnline}
-                  >
-                    <RefreshCw className={`h-4 w-4 mr-2 ${syncing ? 'animate-spin' : ''}`} />
-                    {t("dashboard.syncNow")}
-                  </Button>
+    <ResponsiveLayout title={t("menu.dashboard")}>
+      <div className="space-y-4 md:space-y-6">
+        {/* Responsive Success Banner */}
+        {showBanner && (
+          <Card className="bg-gradient-to-r from-success/10 to-primary/10 border-success/30 relative overflow-hidden">
+            <button
+              onClick={() => setShowBanner(false)}
+              className="absolute top-2 right-2 text-muted-foreground hover:text-foreground"
+            >
+              ×
+            </button>
+            <CardContent className="pt-4 md:pt-6 pb-4">
+              <div className="flex items-start gap-3">
+                <CheckCircle className="h-6 w-6 text-success shrink-0 mt-0.5" />
+                <div>
+                  <h3 className="font-bold text-base md:text-lg text-success">
+                    {i18n.language === "bn" 
+                      ? "OMNIMANAGER এখন ১০০% রেসপন্সিভ এবং ক্যাশিয়ার-পারফেক্ট" 
+                      : "OMNIMANAGER IS NOW 100% RESPONSIVE & CASHIER-PERFECT"}
+                  </h3>
+                  <p className="text-sm text-muted-foreground mt-1">
+                    {i18n.language === "bn"
+                      ? "৳৫,০০০ ফোন থেকে বড় ডেস্কটপ পর্যন্ত সুন্দরভাবে কাজ করে। বাংলাদেশের প্রতিটি দোকানের জন্য প্রস্তুত!"
+                      : "Works beautifully from ৳5,000 phone to big desktop. Ready for every shop in Bangladesh!"}
+                  </p>
                 </div>
-              </CardContent>
-            </Card>
+              </div>
+            </CardContent>
+          </Card>
+        )}
 
-            <div className="grid gap-6 md:grid-cols-2 lg:grid-cols-4">
-              {stats.map((stat) => {
-                const Icon = stat.icon;
-                return (
-                  <Card key={stat.title}>
-                    <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-                      <CardTitle className="text-sm font-medium">
-                        {stat.title}
-                      </CardTitle>
-                      <Icon className="h-4 w-4 text-muted-foreground" />
-                    </CardHeader>
-                    <CardContent>
-                      <div className="text-2xl font-bold">{stat.value}</div>
-                      <p className="text-xs text-muted-foreground mt-1">
-                        {stat.description}
-                      </p>
-                    </CardContent>
-                  </Card>
-                );
-              })}
-            </div>
+        {/* Welcome Section */}
+        <div>
+          <h2 className="text-2xl md:text-3xl font-bold">{t("common.welcome")}, {tenantName}</h2>
+          <p className="text-muted-foreground mt-1 text-sm md:text-base">
+            {t("dashboard.businessToday")}
+          </p>
+        </div>
 
-            {/* Pending Offline Sales Card */}
-            {pendingSalesCount > 0 && (
-              <Card className="border-warning">
-                <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-                  <div className="flex items-center gap-2">
-                    <AlertCircle className="h-5 w-5 text-warning" />
-                    <CardTitle>{t("dashboard.pendingOfflineSales")}</CardTitle>
+        {/* Sync Status Card */}
+        <Card className={cn(
+          "border-2 transition-colors",
+          isOnline ? "border-success/50" : "border-destructive/50"
+        )}>
+          <CardContent className="pt-4 md:pt-6">
+            <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
+              <div className="flex items-center gap-3">
+                {isOnline ? (
+                  <div className="h-10 w-10 rounded-full bg-success/20 flex items-center justify-center">
+                    <Wifi className="h-5 w-5 text-success" />
                   </div>
-                  <Badge variant="secondary" className="text-warning">
-                    {formatCount(pendingSalesCount)}
-                  </Badge>
-                </CardHeader>
-                <CardContent>
+                ) : (
+                  <div className="h-10 w-10 rounded-full bg-destructive/20 flex items-center justify-center">
+                    <WifiOff className="h-5 w-5 text-destructive" />
+                  </div>
+                )}
+                <div>
+                  <p className="font-semibold text-base">
+                    {t(isOnline ? "dashboard.online" : "dashboard.offline")}
+                  </p>
                   <p className="text-sm text-muted-foreground">
-                    {t("pos.offlineSalesCount", { count: pendingSalesCount })}
+                    {t("dashboard.lastSynced")}: {formatTime()}
+                  </p>
+                </div>
+              </div>
+              <Button
+                onClick={handleForceSync}
+                disabled={syncing || !isOnline}
+                className="h-11 px-6 rounded-xl"
+              >
+                <RefreshCw className={cn("h-4 w-4 mr-2", syncing && "animate-spin")} />
+                {t("dashboard.syncNow")}
+              </Button>
+            </div>
+          </CardContent>
+        </Card>
+
+        {/* Stats Grid - Responsive */}
+        <div className="grid gap-3 md:gap-4 grid-cols-2 lg:grid-cols-4">
+          {stats.map((stat) => {
+            const Icon = stat.icon;
+            return (
+              <Card key={stat.title} className="rounded-xl">
+                <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2 px-4 pt-4">
+                  <CardTitle className="text-xs md:text-sm font-medium text-muted-foreground">
+                    {stat.title}
+                  </CardTitle>
+                  <div className={cn("h-8 w-8 rounded-lg flex items-center justify-center", `bg-muted`)}>
+                    <Icon className={cn("h-4 w-4", stat.color)} />
+                  </div>
+                </CardHeader>
+                <CardContent className="px-4 pb-4">
+                  <div className="text-xl md:text-2xl font-bold">{stat.value}</div>
+                  <p className="text-xs text-muted-foreground mt-1">
+                    {stat.description}
                   </p>
                 </CardContent>
               </Card>
-            )}
+            );
+          })}
+        </div>
 
-            <Card>
-              <CardHeader>
-                <CardTitle>{t("dashboard.quickActions")}</CardTitle>
-              </CardHeader>
-              <CardContent>
-                <p className="text-sm text-muted-foreground">
-                  {t("dashboard.dashboardReady")}
-                </p>
-              </CardContent>
-            </Card>
-          </div>
-        </main>
+        {/* Pending Offline Sales Card */}
+        {pendingSalesCount > 0 && (
+          <Card className="border-warning/50 bg-warning/5 rounded-xl">
+            <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
+              <div className="flex items-center gap-2">
+                <AlertCircle className="h-5 w-5 text-warning" />
+                <CardTitle className="text-base">{t("dashboard.pendingOfflineSales")}</CardTitle>
+              </div>
+              <Badge variant="secondary" className="bg-warning/20 text-warning border-warning/30">
+                {formatCount(pendingSalesCount)}
+              </Badge>
+            </CardHeader>
+            <CardContent>
+              <p className="text-sm text-muted-foreground">
+                {t("pos.offlineSalesCount", { count: pendingSalesCount })}
+              </p>
+            </CardContent>
+          </Card>
+        )}
+
+        {/* Quick Actions */}
+        <Card className="rounded-xl">
+          <CardHeader>
+            <CardTitle className="text-base md:text-lg">{t("dashboard.quickActions")}</CardTitle>
+          </CardHeader>
+          <CardContent>
+            <p className="text-sm text-muted-foreground">
+              {t("dashboard.dashboardReady")}
+            </p>
+          </CardContent>
+        </Card>
       </div>
-    </SidebarProvider>
+    </ResponsiveLayout>
   );
 }

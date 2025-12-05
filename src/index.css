@@ -42,7 +42,7 @@ All colors MUST be HSL.
     --input: 214 32% 91%;
     --ring: 221 83% 53%;
 
-    --radius: 0.5rem;
+    --radius: 0.75rem;
 
     --sidebar-background: 222 47% 11%;
     --sidebar-foreground: 210 40% 98%;
@@ -108,8 +108,14 @@ All colors MUST be HSL.
     @apply border-border;
   }
 
+  html {
+    font-size: 16px;
+    -webkit-tap-highlight-color: transparent;
+  }
+
   body {
-    @apply bg-background text-foreground;
+    @apply bg-background text-foreground antialiased;
+    font-family: 'Inter', system-ui, sans-serif;
   }
 
   .font-bengali {
@@ -118,5 +124,35 @@ All colors MUST be HSL.
 
   .font-sans {
     font-family: 'Inter', system-ui, sans-serif;
+  }
+
+  /* Safe area for mobile devices with notches */
+  .safe-area-bottom {
+    padding-bottom: env(safe-area-inset-bottom, 0);
+  }
+
+  .safe-area-top {
+    padding-top: env(safe-area-inset-top, 0);
+  }
+
+  /* Hide scrollbar but keep functionality */
+  .scrollbar-hide {
+    -ms-overflow-style: none;
+    scrollbar-width: none;
+  }
+
+  .scrollbar-hide::-webkit-scrollbar {
+    display: none;
+  }
+
+  /* Touch manipulation for better mobile experience */
+  .touch-manipulation {
+    touch-action: manipulation;
+  }
+
+  /* Minimum touch target size */
+  .touch-target {
+    min-height: 44px;
+    min-width: 44px;
   }
 }
