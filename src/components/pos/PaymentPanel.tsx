@@ -1,11 +1,12 @@
 import { useState } from "react";
 import { useTranslation } from "react-i18next";
-import { CreditCard, Banknote, Smartphone, Receipt } from "lucide-react";
+import { CreditCard, Banknote, Smartphone, Receipt, User } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Card } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
+import { Separator } from "@/components/ui/separator";
 import { toast } from "sonner";
 import { supabase } from "@/integrations/supabase/client";
 import { savePendingSale } from "@/lib/offline-db";
@@ -47,8 +48,8 @@ export default function PaymentPanel({
   const [processing, setProcessing] = useState(false);
 
   const formatPrice = (price: number) => {
-    const formatted = price.toFixed(2);
-    return i18n.language === "bn" ? `৳ ${toBengaliNumerals(formatted)}` : `৳ ${formatted}`;
+    const formatted = Math.round(price).toLocaleString("en-BD");
+    return i18n.language === "bn" ? `৳${toBengaliNumerals(formatted)}` : `৳${formatted}`;
   };
 
   const handlePayment = async (paymentMethod: string) => {
@@ -88,7 +89,6 @@ export default function PaymentPanel({
       };
 
       if (isOnline) {
-        // Online: save to pending_sales and sync immediately
         const saleId = crypto.randomUUID();
         
         const { error } = await supabase
@@ -103,7 +103,6 @@ export default function PaymentPanel({
 
         if (error) throw error;
 
-        // Update stock
         for (const item of cart) {
           const { data: product } = await supabase
             .from('products')
@@ -119,9 +118,12 @@ export default function PaymentPanel({
           }
         }
 
+        // Vibrate on success
+        if (navigator.vibrate) {
+          navigator.vibrate([100, 50, 100]);
+        }
         toast.success(t("pos.saleCompleted"));
       } else {
-        // Offline: save locally
         const saleId = crypto.randomUUID();
         
         await savePendingSale({
@@ -131,11 +133,13 @@ export default function PaymentPanel({
           created_at: new Date().toISOString(),
         });
 
-        // Update local stock
         for (const item of cart) {
           await syncManager.decrementStockLocally(item.product_id, item.quantity);
         }
 
+        if (navigator.vibrate) {
+          navigator.vibrate([100, 50, 100]);
+        }
         toast.success(t("pos.offlineSale"));
         toast.info(t("pos.willSyncLater"));
         
@@ -152,11 +156,14 @@ export default function PaymentPanel({
   };
 
   return (
-    <Card className="flex flex-col h-full">
+    <Card className="flex flex-col h-full rounded-xl">
       <div className="p-4 space-y-4">
         {/* Customer Selection */}
         <div>
-          <Label>{t("pos.customer")}</Label>
+          <Label className="flex items-center gap-2 mb-2">
+            <User className="h-4 w-4" />
+            {t("pos.customer")}
+          </Label>
           <Select
             value={selectedCustomer?.id || "walk-in"}
             onValueChange={(value) => {
@@ -168,95 +175,100 @@ export default function PaymentPanel({
               }
             }}
           >
-            <SelectTrigger>
+            <SelectTrigger className="h-12 text-base rounded-lg">
               <SelectValue placeholder={t("pos.selectCustomer")} />
             </SelectTrigger>
             <SelectContent>
               <SelectItem value="walk-in">{t("pos.walkIn")}</SelectItem>
               {customers.map(customer => (
                 <SelectItem key={customer.id} value={customer.id}>
-                  {customer.name}
+                  {customer.name} {customer.phone && `(${customer.phone})`}
                 </SelectItem>
               ))}
             </SelectContent>
           </Select>
         </div>
 
+        <Separator />
+
         {/* Totals */}
-        <div className="space-y-2 py-4 border-y">
-          <div className="flex justify-between text-sm">
+        <div className="space-y-3">
+          <div className="flex justify-between text-base">
             <span className="text-muted-foreground">{t("pos.subtotal")}</span>
             <span className="font-medium">{formatPrice(subtotal)}</span>
           </div>
           
-          <div className="flex justify-between items-center text-sm">
+          <div className="flex justify-between items-center">
             <Label htmlFor="discount">{t("pos.discount")}</Label>
             <Input
               id="discount"
               type="number"
               value={discount}
               onChange={(e) => onDiscountChange(Number(e.target.value))}
-              className="w-24 text-right"
+              className="w-28 text-right h-10 rounded-lg"
             />
           </div>
 
-          <div className="flex justify-between text-sm">
-            <span className="text-muted-foreground">{t("pos.tax")}</span>
+          <div className="flex justify-between text-base">
+            <span className="text-muted-foreground">{t("pos.tax")} (5%)</span>
             <span className="font-medium">{formatPrice(tax)}</span>
           </div>
 
-          <div className="flex justify-between text-lg font-bold pt-2">
+          <Separator />
+
+          <div className="flex justify-between text-xl font-bold">
             <span>{t("pos.total")}</span>
             <span className="text-primary">{formatPrice(total)}</span>
           </div>
         </div>
 
+        <Separator />
+
         {/* Payment Buttons */}
-        <div className="grid grid-cols-2 gap-2">
+        <div className="grid grid-cols-2 gap-3">
           <Button
             onClick={() => handlePayment("cash")}
             disabled={cart.length === 0 || processing}
-            className="h-16"
+            className="h-16 text-base font-semibold rounded-xl bg-success hover:bg-success/90"
           >
             <div className="flex flex-col items-center gap-1">
-              <Banknote className="h-5 w-5" />
-              <span className="text-xs">{t("pos.cash")}</span>
+              <Banknote className="h-6 w-6" />
+              <span>{t("pos.cash")}</span>
             </div>
           </Button>
 
           <Button
             onClick={() => handlePayment("card")}
             disabled={cart.length === 0 || processing}
-            className="h-16"
+            className="h-16 text-base font-semibold rounded-xl"
             variant="secondary"
           >
             <div className="flex flex-col items-center gap-1">
-              <CreditCard className="h-5 w-5" />
-              <span className="text-xs">{t("pos.card")}</span>
+              <CreditCard className="h-6 w-6" />
+              <span>{t("pos.card")}</span>
             </div>
           </Button>
 
           <Button
             onClick={() => handlePayment("mobile")}
             disabled={cart.length === 0 || processing}
-            className="h-16"
-            variant="secondary"
+            className="h-16 text-base font-semibold rounded-xl bg-accent hover:bg-accent/90"
           >
             <div className="flex flex-col items-center gap-1">
-              <Smartphone className="h-5 w-5" />
-              <span className="text-xs">{t("pos.mobileBanking")}</span>
+              <Smartphone className="h-6 w-6" />
+              <span>{i18n.language === "bn" ? "বিকাশ" : "bKash"}</span>
             </div>
           </Button>
 
           <Button
             onClick={() => handlePayment("credit")}
             disabled={cart.length === 0 || processing}
-            className="h-16"
+            className="h-16 text-base font-semibold rounded-xl"
             variant="outline"
           >
             <div className="flex flex-col items-center gap-1">
-              <Receipt className="h-5 w-5" />
-              <span className="text-xs">{t("pos.credit")}</span>
+              <Receipt className="h-6 w-6" />
+              <span>{t("pos.credit")}</span>
             </div>
           </Button>
         </div>
