@@ -2,9 +2,9 @@ import { useForm } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
 import * as z from "zod";
 import { useMutation, useQueryClient } from "@tanstack/react-query";
-import { supabase } from "@/integrations/supabase/client";
 import { useTranslation } from "react-i18next";
 import { toast } from "sonner";
+import { Loader2 } from "lucide-react";
 import {
   Dialog,
   DialogContent,
@@ -28,23 +28,28 @@ import {
   SelectTrigger,
   SelectValue,
 } from "@/components/ui/select";
-import { Checkbox } from "@/components/ui/checkbox";
 import { useEffect } from "react";
 import { ImageUpload } from "./ImageUpload";
+import {
+  createProduct,
+  updateProduct,
+  Product,
+  Category
+} from "@/integrations/appwrite";
 
 const productSchema = z.object({
   name: z.string().min(1, "Product name is required"),
-  sku: z.string().optional(),
+  sku: z.string().min(1, "SKU is required"),
   barcode: z.string().optional(),
-  category_id: z.string().optional(),
-  purchase_price: z.string().min(1, "Purchase price is required"),
-  selling_price: z.string().min(1, "Selling price is required"),
-  current_stock: z.string().min(1, "Current stock is required"),
-  low_stock_threshold: z.string().min(1, "Low stock threshold is required"),
-  unit: z.string().min(1, "Unit is required"),
-  image_url: z.string().optional(),
-  has_expiry: z.boolean().default(false),
-  expiry_date: z.string().optional(),
+  categoryId: z.string().optional(),
+  purchasePrice: z.string().min(1, "Purchase price is required"),
+  sellingPrice: z.string().min(1, "Selling price is required"),
+  currentStock: z.string().min(1, "Current stock is required"),
+  lowStockThreshold: z.string().optional(),
+  unit: z.string().optional(),
+  imageUrl: z.string().optional(),
+  hasExpiry: z.boolean().default(false),
+  expiryDate: z.string().optional(),
 });
 
 type ProductFormData = z.infer<typeof productSchema>;
@@ -52,8 +57,9 @@ type ProductFormData = z.infer<typeof productSchema>;
 interface ProductDialogProps {
   open: boolean;
   onOpenChange: (open: boolean) => void;
-  product?: any;
-  categories: any[];
+  product?: Product | null;
+  categories: Category[];
+  tenantId: string;
 }
 
 export function ProductDialog({
@@ -61,6 +67,7 @@ export function ProductDialog({
   onOpenChange,
   product,
   categories,
+  tenantId,
 }: ProductDialogProps) {
   const { t } = useTranslation();
   const queryClient = useQueryClient();
@@ -71,15 +78,15 @@ export function ProductDialog({
       name: "",
       sku: "",
       barcode: "",
-      category_id: "",
-      purchase_price: "0",
-      selling_price: "0",
-      current_stock: "0",
-      low_stock_threshold: "10",
+      categoryId: "",
+      purchasePrice: "0",
+      sellingPrice: "0",
+      currentStock: "0",
+      lowStockThreshold: "10",
       unit: "pcs",
-      image_url: "",
-      has_expiry: false,
-      expiry_date: "",
+      imageUrl: "",
+      hasExpiry: false,
+      expiryDate: "",
     },
   });
 
@@ -89,68 +96,56 @@ export function ProductDialog({
         name: product.name,
         sku: product.sku || "",
         barcode: product.barcode || "",
-        category_id: product.category_id || "",
-        purchase_price: product.purchase_price.toString(),
-        selling_price: product.selling_price.toString(),
-        current_stock: product.current_stock.toString(),
-        low_stock_threshold: product.low_stock_threshold.toString(),
-        unit: product.unit,
-        image_url: product.image_url || "",
-        has_expiry: product.has_expiry,
-        expiry_date: product.expiry_date || "",
+        categoryId: product.categoryId || "",
+        purchasePrice: (product.purchasePrice || 0).toString(),
+        sellingPrice: (product.sellingPrice || 0).toString(),
+        currentStock: product.currentStock.toString(),
+        lowStockThreshold: (product.lowStockThreshold || 10).toString(),
+        unit: product.unit || "pcs",
+        imageUrl: product.imageUrl || "",
+        hasExpiry: product.hasExpiry || false,
+        expiryDate: product.expiryDate || "",
       });
     } else {
       form.reset({
         name: "",
         sku: "",
         barcode: "",
-        category_id: "",
-        purchase_price: "0",
-        selling_price: "0",
-        current_stock: "0",
-        low_stock_threshold: "10",
+        categoryId: "",
+        purchasePrice: "0",
+        sellingPrice: "0",
+        currentStock: "0",
+        lowStockThreshold: "10",
         unit: "pcs",
-        image_url: "",
-        has_expiry: false,
-        expiry_date: "",
+        imageUrl: "",
+        hasExpiry: false,
+        expiryDate: "",
       });
     }
   }, [product, form]);
 
   const saveMutation = useMutation({
     mutationFn: async (data: ProductFormData) => {
-      const { data: userData } = await supabase.auth.getUser();
-      const { data: profile } = await supabase
-        .from("profiles")
-        .select("tenant_id")
-        .eq("id", userData.user?.id)
-        .single();
-
       const productData = {
         name: data.name,
-        sku: data.sku || null,
-        barcode: data.barcode || null,
-        category_id: data.category_id || null,
-        purchase_price: parseFloat(data.purchase_price),
-        selling_price: parseFloat(data.selling_price),
-        current_stock: parseInt(data.current_stock),
-        low_stock_threshold: parseInt(data.low_stock_threshold),
-        unit: data.unit,
-        image_url: data.image_url || null,
-        has_expiry: data.has_expiry,
-        expiry_date: data.has_expiry && data.expiry_date ? data.expiry_date : null,
-        tenant_id: profile?.tenant_id,
+        sku: data.sku,
+        barcode: data.barcode || undefined,
+        categoryId: data.categoryId || undefined,
+        purchasePrice: parseFloat(data.purchasePrice),
+        sellingPrice: parseFloat(data.sellingPrice),
+        currentStock: parseInt(data.currentStock),
+        lowStockThreshold: data.lowStockThreshold ? parseInt(data.lowStockThreshold) : 10,
+        unit: data.unit || "pcs",
+        imageUrl: data.imageUrl || undefined,
+        hasExpiry: data.hasExpiry,
+        expiryDate: data.hasExpiry && data.expiryDate ? data.expiryDate : undefined,
+        tenantId: tenantId,
       };
 
       if (product) {
-        const { error } = await supabase
-          .from("products")
-          .update(productData)
-          .eq("id", product.id);
-        if (error) throw error;
+        return await updateProduct(product.$id, productData);
       } else {
-        const { error } = await supabase.from("products").insert(productData);
-        if (error) throw error;
+        return await createProduct(productData);
       }
     },
     onSuccess: () => {
@@ -160,8 +155,9 @@ export function ProductDialog({
       );
       onOpenChange(false);
     },
-    onError: () => {
-      toast.error(t("common.error"));
+    onError: (error: Error) => {
+      console.error("Save error:", error);
+      toast.error(t("common.error") + ": " + error.message);
     },
   });
 
@@ -185,9 +181,9 @@ export function ProductDialog({
                 name="name"
                 render={({ field }) => (
                   <FormItem>
-                    <FormLabel>{t("products.productName")}</FormLabel>
+                    <FormLabel>{t("products.productName")}*</FormLabel>
                     <FormControl>
-                      <Input {...field} />
+                      <Input placeholder="Enter product name" {...field} />
                     </FormControl>
                     <FormMessage />
                   </FormItem>
@@ -196,13 +192,13 @@ export function ProductDialog({
 
               <FormField
                 control={form.control}
-                name="category_id"
+                name="categoryId"
                 render={({ field }) => (
                   <FormItem>
                     <FormLabel>{t("products.category")}</FormLabel>
                     <Select
                       onValueChange={field.onChange}
-                      defaultValue={field.value}
+                      value={field.value}
                     >
                       <FormControl>
                         <SelectTrigger>
@@ -213,7 +209,7 @@ export function ProductDialog({
                       </FormControl>
                       <SelectContent>
                         {categories.map((cat) => (
-                          <SelectItem key={cat.id} value={cat.id}>
+                          <SelectItem key={cat.$id} value={cat.$id}>
                             {cat.name}
                           </SelectItem>
                         ))}
@@ -231,7 +227,7 @@ export function ProductDialog({
                   <FormItem>
                     <FormLabel>{t("products.sku")}</FormLabel>
                     <FormControl>
-                      <Input {...field} />
+                      <Input placeholder="SKU-001" {...field} />
                     </FormControl>
                     <FormMessage />
                   </FormItem>
@@ -245,7 +241,7 @@ export function ProductDialog({
                   <FormItem>
                     <FormLabel>{t("products.barcode")}</FormLabel>
                     <FormControl>
-                      <Input {...field} />
+                      <Input placeholder="1234567890123" {...field} />
                     </FormControl>
                     <FormMessage />
                   </FormItem>
@@ -254,12 +250,12 @@ export function ProductDialog({
 
               <FormField
                 control={form.control}
-                name="purchase_price"
+                name="purchasePrice"
                 render={({ field }) => (
                   <FormItem>
-                    <FormLabel>{t("products.purchasePrice")}</FormLabel>
+                    <FormLabel>{t("products.purchasePrice")}*</FormLabel>
                     <FormControl>
-                      <Input type="number" step="0.01" {...field} />
+                      <Input type="number" step="0.01" min="0" {...field} />
                     </FormControl>
                     <FormMessage />
                   </FormItem>
@@ -268,12 +264,12 @@ export function ProductDialog({
 
               <FormField
                 control={form.control}
-                name="selling_price"
+                name="sellingPrice"
                 render={({ field }) => (
                   <FormItem>
-                    <FormLabel>{t("products.sellingPrice")}</FormLabel>
+                    <FormLabel>{t("products.sellingPrice")}*</FormLabel>
                     <FormControl>
-                      <Input type="number" step="0.01" {...field} />
+                      <Input type="number" step="0.01" min="0" {...field} />
                     </FormControl>
                     <FormMessage />
                   </FormItem>
@@ -282,12 +278,12 @@ export function ProductDialog({
 
               <FormField
                 control={form.control}
-                name="current_stock"
+                name="currentStock"
                 render={({ field }) => (
                   <FormItem>
-                    <FormLabel>{t("products.currentStock")}</FormLabel>
+                    <FormLabel>{t("products.currentStock")}*</FormLabel>
                     <FormControl>
-                      <Input type="number" {...field} />
+                      <Input type="number" min="0" {...field} />
                     </FormControl>
                     <FormMessage />
                   </FormItem>
@@ -296,12 +292,12 @@ export function ProductDialog({
 
               <FormField
                 control={form.control}
-                name="low_stock_threshold"
+                name="lowStockThreshold"
                 render={({ field }) => (
                   <FormItem>
-                    <FormLabel>{t("products.lowStockThreshold")}</FormLabel>
+                    <FormLabel>{t("products.lowStockThreshold")}*</FormLabel>
                     <FormControl>
-                      <Input type="number" {...field} />
+                      <Input type="number" min="0" {...field} />
                     </FormControl>
                     <FormMessage />
                   </FormItem>
@@ -313,9 +309,9 @@ export function ProductDialog({
                 name="unit"
                 render={({ field }) => (
                   <FormItem>
-                    <FormLabel>{t("products.unit")}</FormLabel>
+                    <FormLabel>{t("products.unit")}*</FormLabel>
                     <FormControl>
-                      <Input {...field} />
+                      <Input placeholder="pcs, kg, ltr..." {...field} />
                     </FormControl>
                     <FormMessage />
                   </FormItem>
@@ -324,7 +320,43 @@ export function ProductDialog({
 
               <FormField
                 control={form.control}
-                name="image_url"
+                name="hasExpiry"
+                render={({ field }) => (
+                  <FormItem className="flex flex-row items-start space-x-3 space-y-0">
+                    <FormControl>
+                      <input
+                        type="checkbox"
+                        checked={field.value}
+                        onChange={field.onChange}
+                        className="h-4 w-4 mt-1"
+                      />
+                    </FormControl>
+                    <div className="space-y-1 leading-none">
+                      <FormLabel>{t("products.hasExpiry") || "Has Expiry Date"}</FormLabel>
+                    </div>
+                  </FormItem>
+                )}
+              />
+
+              {form.watch("hasExpiry") && (
+                <FormField
+                  control={form.control}
+                  name="expiryDate"
+                  render={({ field }) => (
+                    <FormItem>
+                      <FormLabel>{t("products.expiryDate") || "Expiry Date"}</FormLabel>
+                      <FormControl>
+                        <Input type="date" {...field} />
+                      </FormControl>
+                      <FormMessage />
+                    </FormItem>
+                  )}
+                />
+              )}
+
+              <FormField
+                control={form.control}
+                name="imageUrl"
                 render={({ field }) => (
                   <FormItem className="col-span-2">
                     <FormLabel>{t("products.productImage")}</FormLabel>
@@ -340,38 +372,6 @@ export function ProductDialog({
               />
             </div>
 
-            <FormField
-              control={form.control}
-              name="has_expiry"
-              render={({ field }) => (
-                <FormItem className="flex items-center space-x-2">
-                  <FormControl>
-                    <Checkbox
-                      checked={field.value}
-                      onCheckedChange={field.onChange}
-                    />
-                  </FormControl>
-                  <FormLabel className="!mt-0">{t("products.hasExpiry")}</FormLabel>
-                </FormItem>
-              )}
-            />
-
-            {form.watch("has_expiry") && (
-              <FormField
-                control={form.control}
-                name="expiry_date"
-                render={({ field }) => (
-                  <FormItem>
-                    <FormLabel>{t("products.expiryDate")}</FormLabel>
-                    <FormControl>
-                      <Input type="date" {...field} />
-                    </FormControl>
-                    <FormMessage />
-                  </FormItem>
-                )}
-              />
-            )}
-
             <div className="flex justify-end gap-2 pt-4">
               <Button
                 type="button"
@@ -380,7 +380,13 @@ export function ProductDialog({
               >
                 {t("common.cancel")}
               </Button>
-              <Button type="submit">{t("common.save")}</Button>
+              <Button type="submit" disabled={saveMutation.isPending}>
+                {saveMutation.isPending ? (
+                  <><Loader2 className="h-4 w-4 mr-2 animate-spin" /> Saving...</>
+                ) : (
+                  t("common.save")
+                )}
+              </Button>
             </div>
           </form>
         </Form>

@@ -1,8 +1,7 @@
 import { useState } from "react";
 import { useMutation, useQueryClient } from "@tanstack/react-query";
-import { supabase } from "@/integrations/supabase/client";
 import { useTranslation } from "react-i18next";
-import { Plus } from "lucide-react";
+import { Plus, Loader2 } from "lucide-react";
 import { toast } from "sonner";
 import { Button } from "@/components/ui/button";
 import {
@@ -14,8 +13,13 @@ import {
 } from "@/components/ui/dialog";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
+import { createCategory } from "@/integrations/appwrite";
 
-export function CategoryQuickAdd() {
+interface CategoryQuickAddProps {
+  tenantId: string;
+}
+
+export function CategoryQuickAdd({ tenantId }: CategoryQuickAddProps) {
   const { t } = useTranslation();
   const queryClient = useQueryClient();
   const [isOpen, setIsOpen] = useState(false);
@@ -26,24 +30,14 @@ export function CategoryQuickAdd() {
 
   const addCategoryMutation = useMutation({
     mutationFn: async (data: { name: string; color: string }) => {
-      const { data: userData, error: authError } = await supabase.auth.getUser();
-      if (authError || !userData.user) throw new Error("Not authenticated");
+      if (!tenantId) throw new Error("No tenant found");
 
-      const { data: profile, error: profileError } = await supabase
-        .from("profiles")
-        .select("tenant_id")
-        .eq("id", userData.user.id)
-        .single();
-
-      if (profileError || !profile?.tenant_id) throw new Error("No tenant found");
-
-      const { error } = await supabase.from("categories").insert({
+      return await createCategory({
         name: data.name,
         color: data.color,
-        tenant_id: profile.tenant_id,
+        tenantId: tenantId,
+        isActive: true,
       });
-      
-      if (error) throw error;
     },
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ["categories"] });
@@ -59,6 +53,10 @@ export function CategoryQuickAdd() {
 
   const handleSubmit = (e: React.FormEvent) => {
     e.preventDefault();
+    if (!formData.name.trim()) {
+      toast.error("Please enter a category name");
+      return;
+    }
     addCategoryMutation.mutate(formData);
   };
 
@@ -89,19 +87,26 @@ export function CategoryQuickAdd() {
                   onChange={(e) =>
                     setFormData({ ...formData, name: e.target.value })
                   }
+                  placeholder="Enter category name"
                   required
                 />
               </div>
               <div>
                 <Label htmlFor="color">{t("categories.color")}</Label>
-                <Input
-                  id="color"
-                  type="color"
-                  value={formData.color}
-                  onChange={(e) =>
-                    setFormData({ ...formData, color: e.target.value })
-                  }
-                />
+                <div className="flex gap-2 items-center">
+                  <Input
+                    id="color"
+                    type="color"
+                    value={formData.color}
+                    onChange={(e) =>
+                      setFormData({ ...formData, color: e.target.value })
+                    }
+                    className="w-16 h-10 p-1"
+                  />
+                  <span className="text-sm text-muted-foreground">
+                    {formData.color}
+                  </span>
+                </div>
               </div>
             </div>
             <DialogFooter className="mt-6">
@@ -112,7 +117,16 @@ export function CategoryQuickAdd() {
               >
                 {t("common.cancel")}
               </Button>
-              <Button type="submit">{t("common.save")}</Button>
+              <Button
+                type="submit"
+                disabled={addCategoryMutation.isPending}
+              >
+                {addCategoryMutation.isPending ? (
+                  <><Loader2 className="h-4 w-4 mr-2 animate-spin" /> Saving...</>
+                ) : (
+                  t("common.save")
+                )}
+              </Button>
             </DialogFooter>
           </form>
         </DialogContent>

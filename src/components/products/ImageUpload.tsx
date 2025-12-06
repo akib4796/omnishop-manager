@@ -1,5 +1,5 @@
 import { useState } from "react";
-import { supabase } from "@/integrations/supabase/client";
+import { supabase } from "@/integrations/appwrite";
 import { useTranslation } from "react-i18next";
 import { Upload, X } from "lucide-react";
 import { toast } from "sonner";

@@ -1,7 +1,7 @@
 import { useTranslation } from "react-i18next";
 import { NavLink } from "@/components/NavLink";
 import { useLocation, useNavigate } from "react-router-dom";
-import { supabase } from "@/integrations/supabase/client";
+import { signOut } from "@/integrations/appwrite";
 import { SyncIndicator } from "./SyncIndicator";
 import { LanguageSwitcher } from "./LanguageSwitcher";
 import {
@@ -55,7 +55,7 @@ export function AppSidebar() {
   const isActive = (path: string) => currentPath === path;
 
   const handleLogout = async () => {
-    const { error } = await supabase.auth.signOut();
+    const { error } = await signOut();
     if (error) {
       toast.error(t("auth.errorLoggingOut"));
     } else {

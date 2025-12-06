@@ -8,6 +8,7 @@ import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Button } from "@/components/ui/button";
 import { Switch } from "@/components/ui/switch";
 import { Label } from "@/components/ui/label";
+import { ChangePasswordForm } from "@/components/ChangePasswordForm";
 import { syncManager } from "@/lib/sync-manager";
 import { getPendingSales, initOfflineDB } from "@/lib/offline-db";
 import { toBengaliNumerals } from "@/lib/i18n-utils";
@@ -28,7 +29,7 @@ export default function Settings() {
   async function loadSettings() {
     try {
       await initOfflineDB();
-      
+
       // Get pending sales count
       const pending = await getPendingSales();
       setPendingCount(pending.length);
@@ -50,7 +51,7 @@ export default function Settings() {
 
   async function handleForceSync() {
     if (syncing) return;
-    
+
     setSyncing(true);
     try {
       await syncManager.syncAll();
@@ -72,8 +73,8 @@ export default function Settings() {
 
   const formatStorage = (mb: number) => {
     const formatted = mb.toFixed(2);
-    return i18n.language === "bn" 
-      ? `${toBengaliNumerals(formatted)} MB` 
+    return i18n.language === "bn"
+      ? `${toBengaliNumerals(formatted)} MB`
       : `${formatted} MB`;
   };
 
@@ -173,10 +174,13 @@ export default function Settings() {
               <TabsContent value="account" className="space-y-6 mt-6">
                 <Card>
                   <CardHeader>
-                    <CardTitle>{t("settings.account")}</CardTitle>
+                    <CardTitle>{t("settings.changePassword")}</CardTitle>
+                    <CardDescription>
+                      Update your account password for security
+                    </CardDescription>
                   </CardHeader>
                   <CardContent>
-                    <p className="text-muted-foreground">{t("common.loading")}</p>
+                    <ChangePasswordForm />
                   </CardContent>
                 </Card>
               </TabsContent>

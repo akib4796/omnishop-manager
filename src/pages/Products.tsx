@@ -1,12 +1,11 @@
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
-import { supabase } from "@/integrations/supabase/client";
 import { useTranslation } from "react-i18next";
 import { AppSidebar } from "@/components/AppSidebar";
 import { SidebarProvider, SidebarInset } from "@/components/ui/sidebar";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
-import { Plus, Search, Download, Upload, Pencil, Trash2 } from "lucide-react";
+import { Plus, Search, Download, Loader2 } from "lucide-react";
 import { toast } from "sonner";
 import { ProductDialog } from "@/components/products/ProductDialog";
 import { ProductsTable } from "@/components/products/ProductsTable";
@@ -18,58 +17,64 @@ import {
   SelectTrigger,
   SelectValue,
 } from "@/components/ui/select";
-import { formatCurrency, toBengaliNumerals } from "@/lib/i18n-utils";
+import { toBengaliNumerals } from "@/lib/i18n-utils";
+import {
+  getProducts,
+  deleteProduct,
+  Product,
+  getCategories,
+  Category
+} from "@/integrations/appwrite";
+import { useAuth } from "@/hooks/useAuth";
 
 export default function Products() {
   const { t, i18n } = useTranslation();
   const queryClient = useQueryClient();
+  const { profile } = useAuth();
   const [searchQuery, setSearchQuery] = useState("");
   const [selectedCategory, setSelectedCategory] = useState<string>("all");
   const [isDialogOpen, setIsDialogOpen] = useState(false);
-  const [editingProduct, setEditingProduct] = useState<any>(null);
+  const [editingProduct, setEditingProduct] = useState<Product | null>(null);
 
-  const { data: products, isLoading: productsLoading } = useQuery({
-    queryKey: ["products"],
+  // Get tenant ID from current user's profile
+  const tenantId = profile?.tenantId || '';
+
+  // Fetch products from Appwrite
+  const { data: products, isLoading: productsLoading, error: productsError } = useQuery({
+    queryKey: ["products", tenantId],
     queryFn: async () => {
-      const { data, error } = await supabase
-        .from("products")
-        .select("*, categories(name, color)")
-        .order("name");
-      if (error) throw error;
-      return data;
+      if (!tenantId) return [];
+      return await getProducts(tenantId);
     },
+    enabled: !!tenantId,
   });
 
-  const { data: categories } = useQuery({
-    queryKey: ["categories"],
+  // Fetch categories from Appwrite
+  const { data: categories, isLoading: categoriesLoading } = useQuery({
+    queryKey: ["categories", tenantId],
     queryFn: async () => {
-      const { data, error } = await supabase
-        .from("categories")
-        .select("*")
-        .order("name");
-      if (error) throw error;
-      return data;
+      if (!tenantId) return [];
+      return await getCategories(tenantId);
     },
+    enabled: !!tenantId,
   });
 
+  // Delete product mutation
   const deleteProductMutation = useMutation({
     mutationFn: async (productId: string) => {
-      const { error } = await supabase
-        .from("products")
-        .delete()
-        .eq("id", productId);
-      if (error) throw error;
+      await deleteProduct(productId);
     },
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ["products"] });
       toast.success(t("products.productDeleted"));
     },
-    onError: () => {
+    onError: (error: Error) => {
+      console.error('Delete error:', error);
       toast.error(t("common.error"));
     },
   });
 
-  const handleEdit = (product: any) => {
+  const handleEdit = (product: Product) => {
     setEditingProduct(product);
     setIsDialogOpen(true);
   };
@@ -95,15 +100,22 @@ export default function Products() {
       "Unit",
     ];
 
+    // Find category names for each product
+    const getCategoryName = (categoryId?: string) => {
+      if (!categoryId || !categories) return "";
+      const cat = categories.find(c => c.$id === categoryId);
+      return cat?.name || "";
+    };
+
     const rows = products.map((p) => [
       p.name,
       p.sku || "",
       p.barcode || "",
-      p.categories?.name || "",
-      p.purchase_price,
-      p.selling_price,
-      p.current_stock,
-      p.low_stock_threshold,
+      getCategoryName(p.categoryId),
+      p.purchasePrice,
+      p.sellingPrice,
+      p.currentStock,
+      p.lowStockThreshold,
       p.unit,
     ]);
 
@@ -117,6 +129,7 @@ export default function Products() {
     toast.success(t("products.exportCSV"));
   };
 
+  // Filter products based on search and category
   const filteredProducts = products?.filter((product) => {
     const matchesSearch =
       product.name.toLowerCase().includes(searchQuery.toLowerCase()) ||
@@ -124,14 +137,32 @@ export default function Products() {
       product.barcode?.toLowerCase().includes(searchQuery.toLowerCase());
 
     const matchesCategory =
-      selectedCategory === "all" || product.category_id === selectedCategory;
+      selectedCategory === "all" || product.categoryId === selectedCategory;
 
     return matchesSearch && matchesCategory;
   });
 
+  // Get low stock products
   const lowStockProducts = products?.filter(
-    (p) => p.current_stock <= p.low_stock_threshold
+    (p) => p.currentStock <= p.lowStockThreshold
   );
+
+  // Show loading if no tenant
+  if (!tenantId) {
+    return (
+      <SidebarProvider>
+        <AppSidebar />
+        <SidebarInset>
+          <div className="p-6 flex items-center justify-center h-full">
+            <div className="text-center">
+              <Loader2 className="h-8 w-8 animate-spin mx-auto mb-4" />
+              <p className="text-muted-foreground">Loading...</p>
+            </div>
+          </div>
+        </SidebarInset>
+      </SidebarProvider>
+    );
+  }
 
   return (
     <SidebarProvider>
@@ -185,21 +216,28 @@ export default function Products() {
                 <SelectContent>
                   <SelectItem value="all">{t("products.allCategories")}</SelectItem>
                   {categories?.map((cat) => (
-                    <SelectItem key={cat.id} value={cat.id}>
+                    <SelectItem key={cat.$id} value={cat.$id}>
                       {cat.name}
                     </SelectItem>
                   ))}
                 </SelectContent>
               </Select>
-              <CategoryQuickAdd />
+              <CategoryQuickAdd tenantId={tenantId} />
             </div>
           </div>
 
           {productsLoading ? (
-            <p>{t("common.loading")}</p>
+            <div className="flex items-center justify-center py-12">
+              <Loader2 className="h-8 w-8 animate-spin" />
+            </div>
+          ) : productsError ? (
+            <div className="text-center py-12 text-destructive">
+              {t("common.error")}: {(productsError as Error).message}
+            </div>
           ) : filteredProducts && filteredProducts.length > 0 ? (
             <ProductsTable
               products={filteredProducts}
+              categories={categories || []}
               onEdit={handleEdit}
               onDelete={handleDelete}
             />
@@ -214,6 +252,7 @@ export default function Products() {
             onOpenChange={setIsDialogOpen}
             product={editingProduct}
             categories={categories || []}
+            tenantId={tenantId}
           />
         </div>
       </SidebarInset>

@@ -5,7 +5,12 @@ import { Button } from "@/components/ui/button";
 import { Card } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { toast } from "sonner";
-import { supabase } from "@/integrations/supabase/client";
+import { account } from "@/integrations/appwrite";
+import { getProducts, updateProductStock, getProductById, Product } from "@/integrations/appwrite/products";
+import { getCategories, Category } from "@/integrations/appwrite/categories";
+import { getCustomers, Customer } from "@/integrations/appwrite/customers";
+import { createPendingSale, SaleData } from "@/integrations/appwrite/sales";
+import { useAuth } from "@/hooks/useAuth";
 import { syncManager } from "@/lib/sync-manager";
 import { getCachedProducts, getPendingSales, initOfflineDB, savePendingSale } from "@/lib/offline-db";
 import { toBengaliNumerals } from "@/lib/i18n-utils";
@@ -18,16 +23,55 @@ import { useIsMobile } from "@/hooks/use-mobile";
 import { cn } from "@/lib/utils";
 
 interface CartItem {
-  product_id: string;
+  productId: string;
   name: string;
   price: number;
   quantity: number;
-  current_stock: number;
+  currentStock: number;
+}
+
+// Convert Product to format expected by ProductGrid (snake_case for offline compatibility)
+function productToGridFormat(product: Product) {
+  return {
+    id: product.$id,
+    name: product.name,
+    sku: product.sku,
+    barcode: product.barcode,
+    category_id: product.categoryId,
+    selling_price: product.sellingPrice,
+    current_stock: product.currentStock,
+    low_stock_threshold: product.lowStockThreshold,
+    image_url: product.imageUrl,
+    unit: product.unit,
+  };
+}
+
+// Convert Category to format expected by ProductGrid
+function categoryToGridFormat(category: Category) {
+  return {
+    id: category.$id,
+    name: category.name,
+    color: category.color,
+  };
+}
+
+// Convert Customer to format expected by PaymentPanel
+function customerToGridFormat(customer: Customer) {
+  return {
+    id: customer.$id,
+    name: customer.name,
+    phone: customer.phone,
+    email: customer.email,
+    address: customer.address,
+  };
 }
 
 export default function POS() {
   const { t, i18n } = useTranslation();
   const isMobile = useIsMobile();
+  const { profile, loading: authLoading } = useAuth();
+  const tenantId = profile?.tenantId;
+
   const [isOnline, setIsOnline] = useState(navigator.onLine);
   const [products, setProducts] = useState<any[]>([]);
   const [categories, setCategories] = useState<any[]>([]);
@@ -44,6 +88,9 @@ export default function POS() {
 
   // Initialize offline DB and load data
   useEffect(() => {
+    if (authLoading) return;
+    if (!tenantId) return;
+
     initializeData();
 
     const handleOnline = () => {
@@ -97,13 +144,16 @@ export default function POS() {
       window.removeEventListener("keydown", handleKeyDown);
       unsubscribe();
     };
-  }, [t, cart.length]);
+  }, [t, cart.length, tenantId, authLoading]);
 
   async function initializeData() {
+    if (!tenantId) return;
+
     setLoading(true);
     try {
       await initOfflineDB();
 
+      // Load from offline cache first
       const [cachedProducts, cachedCategories, cachedCustomers] = await Promise.all([
         getCachedProducts(),
         import("@/lib/offline-db").then(m => m.getCachedCategories()),
@@ -114,18 +164,21 @@ export default function POS() {
       setCategories(cachedCategories);
       setCustomers(cachedCustomers);
 
+      // If online, fetch fresh data from Appwrite
       if (navigator.onLine) {
-        const { data: { user } } = await supabase.auth.getUser();
-        if (user) {
+        try {
           const [productsRes, categoriesRes, customersRes] = await Promise.all([
-            supabase.from('products').select('*, categories(id, name, color)'),
-            supabase.from('categories').select('*'),
-            supabase.from('customers').select('*'),
+            getProducts(tenantId),
+            getCategories(tenantId),
+            getCustomers(tenantId),
           ]);
 
-          if (productsRes.data) setProducts(productsRes.data);
-          if (categoriesRes.data) setCategories(categoriesRes.data);
-          if (customersRes.data) setCustomers(customersRes.data);
+          if (productsRes) setProducts(productsRes.map(productToGridFormat));
+          if (categoriesRes) setCategories(categoriesRes.map(categoryToGridFormat));
+          if (customersRes) setCustomers(customersRes.map(customerToGridFormat));
+        } catch (error) {
+          console.error("Error fetching from Appwrite:", error);
+          // Fall back to cached data
         }
       }
 
@@ -145,20 +198,20 @@ export default function POS() {
 
   const addToCart = useCallback((product: any) => {
     setCart(prevCart => {
-      const existingItem = prevCart.find(item => item.product_id === product.id);
+      const existingItem = prevCart.find(item => item.productId === product.id);
       if (existingItem) {
         return prevCart.map(item =>
-          item.product_id === product.id
+          item.productId === product.id
             ? { ...item, quantity: item.quantity + 1 }
             : item
         );
       } else {
         return [...prevCart, {
-          product_id: product.id,
+          productId: product.id,
           name: product.name,
           price: product.selling_price,
           quantity: 1,
-          current_stock: product.current_stock,
+          currentStock: product.current_stock,
         }];
       }
     });
@@ -167,10 +220,10 @@ export default function POS() {
 
   const updateCartItemQty = useCallback((productId: string, newQty: number) => {
     if (newQty <= 0) {
-      setCart(prevCart => prevCart.filter(item => item.product_id !== productId));
+      setCart(prevCart => prevCart.filter(item => item.productId !== productId));
     } else {
       setCart(prevCart => prevCart.map(item =>
-        item.product_id === productId ? { ...item, quantity: newQty } : item
+        item.productId === productId ? { ...item, quantity: newQty } : item
       ));
     }
   }, []);
@@ -184,7 +237,7 @@ export default function POS() {
 
   const holdOrder = useCallback(() => {
     if (cart.length === 0) return;
-    
+
     setHeldOrders(prev => [...prev, {
       id: Date.now().toString(),
       cart: [...cart],
@@ -193,7 +246,7 @@ export default function POS() {
       notes,
       timestamp: new Date(),
     }]);
-    
+
     clearCart();
     toast.success(t("pos.orderHeld"));
   }, [cart, selectedCustomer, discount, notes, clearCart, t]);
@@ -207,27 +260,19 @@ export default function POS() {
   }, []);
 
   const handlePayment = async (paymentMethod: string) => {
-    if (cart.length === 0 || processing) return;
+    if (cart.length === 0 || processing || !tenantId) return;
 
     setProcessing(true);
 
     try {
-      const { data: { user } } = await supabase.auth.getUser();
+      const user = await account.get();
       if (!user) throw new Error("Not authenticated");
 
-      const { data: profile } = await supabase
-        .from('profiles')
-        .select('tenant_id')
-        .eq('id', user.id)
-        .single();
-
-      if (!profile) throw new Error("Profile not found");
-
-      const saleData = {
-        tenant_id: profile.tenant_id,
-        customer_id: selectedCustomer?.id || null,
+      const saleData: SaleData = {
+        tenantId: tenantId,
+        customerId: selectedCustomer?.id || null,
         items: cart.map(item => ({
-          product_id: item.product_id,
+          productId: item.productId,
           quantity: item.quantity,
           price: item.price,
         })),
@@ -235,39 +280,30 @@ export default function POS() {
         discount,
         tax: taxAmount,
         total,
-        payment_method: paymentMethod,
+        paymentMethod: paymentMethod,
         notes,
-        cashier_id: user.id,
-        completed_at: new Date().toISOString(),
+        cashierId: user.$id,
+        completedAt: new Date().toISOString(),
       };
 
       if (isOnline) {
-        const saleId = crypto.randomUUID();
-        
-        const { error } = await supabase
-          .from('pending_sales')
-          .insert({
-            id: saleId,
-            tenant_id: profile.tenant_id,
-            sale_data: saleData,
-            synced: true,
-            synced_at: new Date().toISOString(),
-          });
+        // Create sale in Appwrite
+        await createPendingSale({
+          tenantId: tenantId,
+          saleData: saleData,
+          synced: true,
+          syncedAt: new Date().toISOString(),
+        });
 
-        if (error) throw error;
-
+        // Update product stock on server
         for (const item of cart) {
-          const { data: product } = await supabase
-            .from('products')
-            .select('current_stock')
-            .eq('id', item.product_id)
-            .single();
-
-          if (product) {
-            await supabase
-              .from('products')
-              .update({ current_stock: product.current_stock - item.quantity })
-              .eq('id', item.product_id);
+          try {
+            const product = await getProductById(item.productId);
+            if (product) {
+              await updateProductStock(item.productId, (product.currentStock || 0) - item.quantity);
+            }
+          } catch (err) {
+            console.error(`Failed to update stock for ${item.productId}:`, err);
           }
         }
 
@@ -276,17 +312,24 @@ export default function POS() {
         }
         toast.success(t("pos.saleCompleted"));
       } else {
-        const saleId = crypto.randomUUID();
-        
+        // Save to local IndexedDB for later sync
         await savePendingSale({
-          id: saleId,
-          tenant_id: profile.tenant_id,
-          sale_data: saleData,
+          id: crypto.randomUUID(),
+          tenant_id: tenantId,
+          sale_data: {
+            ...saleData,
+            items: cart.map(item => ({
+              product_id: item.productId,
+              quantity: item.quantity,
+              price: item.price,
+            })),
+          },
           created_at: new Date().toISOString(),
         });
 
+        // Update local stock
         for (const item of cart) {
-          await syncManager.decrementStockLocally(item.product_id, item.quantity);
+          await syncManager.decrementStockLocally(item.productId, item.quantity);
         }
 
         if (navigator.vibrate) {
@@ -294,7 +337,7 @@ export default function POS() {
         }
         toast.success(t("pos.offlineSale"));
         toast.info(t("pos.willSyncLater"));
-        
+
         await loadPendingSalesCount();
       }
 
@@ -316,7 +359,7 @@ export default function POS() {
     return i18n.language === "bn" ? toBengaliNumerals(count) : count;
   };
 
-  if (loading) {
+  if (loading || authLoading) {
     return (
       <div className="flex items-center justify-center h-screen bg-background">
         <div className="flex flex-col items-center gap-4">
@@ -327,13 +370,23 @@ export default function POS() {
     );
   }
 
+  if (!tenantId) {
+    return (
+      <div className="flex items-center justify-center h-screen bg-background">
+        <div className="text-center">
+          <p className="text-lg text-muted-foreground">No tenant found. Please contact your administrator.</p>
+        </div>
+      </div>
+    );
+  }
+
   return (
     <div className="flex flex-col h-screen bg-background">
       {/* Online/Offline Banner */}
       <div className={cn(
         "px-4 py-2 text-center text-sm font-medium shrink-0",
-        isOnline 
-          ? "bg-success text-success-foreground" 
+        isOnline
+          ? "bg-success text-success-foreground"
           : "bg-destructive text-destructive-foreground"
       )}>
         {isOnline ? (
@@ -372,7 +425,7 @@ export default function POS() {
           // On mobile, add bottom padding for cart bar
           "pb-32 md:pb-0"
         )}>
-          <ProductGrid 
+          <ProductGrid
             products={products}
             categories={categories}
             onProductClick={addToCart}
@@ -410,7 +463,7 @@ export default function POS() {
               )}
             </div>
           </div>
-          
+
           <Cart
             items={cart}
             onUpdateQty={updateCartItemQty}

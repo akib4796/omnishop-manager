@@ -1,27 +1,40 @@
 import { Toaster } from "@/components/ui/toaster";
+import { Suspense, lazy } from "react";
 import { Toaster as Sonner } from "@/components/ui/sonner";
 import { TooltipProvider } from "@/components/ui/tooltip";
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import { BrowserRouter, Routes, Route } from "react-router-dom";
-import { ProtectedRoute } from "@/components/ProtectedRoute";
+import { ProtectedRoute } from "./components/ProtectedRoute";
+import { SysAdminProtectedRoute } from "./components/SysAdminProtectedRoute";
 import { PWAInstallPrompt } from "@/components/PWAInstallPrompt";
 import Index from "./pages/Index";
-import Login from "./pages/Login";
-import Signup from "./pages/Signup";
-import ForgotPassword from "./pages/ForgotPassword";
-import Setup from "./pages/Setup";
-import Dashboard from "./pages/Dashboard";
-import Products from "./pages/Products";
-import Inventory from "./pages/Inventory";
-import POS from "./pages/POS";
-import Reports from "./pages/Reports";
-import Settings from "./pages/Settings";
-import Install from "./pages/Install";
-import NotFound from "./pages/NotFound";
-import SalesHistory from "./pages/SalesHistory";
-import Customers from "./pages/Customers";
-import Expenses from "./pages/Expenses";
-import Staff from "./pages/Staff";
+
+const Login = lazy(() => import("./pages/Login"));
+const Signup = lazy(() => import("./pages/Signup"));
+const ForgotPassword = lazy(() => import("./pages/ForgotPassword"));
+const ResetPassword = lazy(() => import("./pages/ResetPassword"));
+const Setup = lazy(() => import("./pages/Setup"));
+const Dashboard = lazy(() => import("./pages/Dashboard"));
+const Products = lazy(() => import("./pages/Products"));
+const Inventory = lazy(() => import("./pages/Inventory"));
+const POS = lazy(() => import("./pages/POS"));
+const Reports = lazy(() => import("./pages/Reports"));
+const Settings = lazy(() => import("./pages/Settings"));
+const Install = lazy(() => import("./pages/Install"));
+const NotFound = lazy(() => import("./pages/NotFound"));
+const SalesHistory = lazy(() => import("./pages/SalesHistory"));
+const Customers = lazy(() => import("./pages/Customers"));
+const Expenses = lazy(() => import("./pages/Expenses"));
+const Staff = lazy(() => import("./pages/Staff"));
+
+// SysAdmin Pages
+const SysAdminLogin = lazy(() => import("./pages/sysadmin/Login"));
+const SysAdminDashboard = lazy(() => import("./pages/sysadmin/Dashboard"));
+const SysAdminTenants = lazy(() => import("./pages/sysadmin/Tenants"));
+const SysAdminActivity = lazy(() => import("./pages/sysadmin/Activity"));
+const SysAdminUsers = lazy(() => import("./pages/sysadmin/Users"));
+const SysAdminAnalytics = lazy(() => import("./pages/sysadmin/Analytics"));
+const SysAdminSettings = lazy(() => import("./pages/sysadmin/Settings"));
 
 const queryClient = new QueryClient();
 
@@ -32,13 +45,15 @@ const App = () => (
       <Sonner />
       <PWAInstallPrompt />
       <BrowserRouter>
-        <Routes>
-          <Route path="/" element={<Index />} />
-          <Route path="/login" element={<Login />} />
-          <Route path="/signup" element={<Signup />} />
-          <Route path="/forgot-password" element={<ForgotPassword />} />
-          <Route path="/setup" element={<ProtectedRoute><Setup /></ProtectedRoute>} />
-          <Route path="/dashboard" element={<ProtectedRoute><Dashboard /></ProtectedRoute>} />
+        <Suspense fallback={<div className="flex items-center justify-center min-h-screen"><div className="animate-spin rounded-full h-12 w-12 border-b-2 border-primary"></div></div>}>
+          <Routes>
+            <Route path="/" element={<Index />} />
+            <Route path="/login" element={<Login />} />
+            <Route path="/signup" element={<Signup />} />
+            <Route path="/forgot-password" element={<ForgotPassword />} />
+            <Route path="/reset-password" element={<ResetPassword />} />
+            <Route path="/setup" element={<ProtectedRoute><Setup /></ProtectedRoute>} />
+            <Route path="/dashboard" element={<ProtectedRoute><Dashboard /></ProtectedRoute>} />
             <Route path="/products" element={<ProtectedRoute><Products /></ProtectedRoute>} />
             <Route path="/inventory" element={<ProtectedRoute><Inventory /></ProtectedRoute>} />
             <Route path="/pos" element={<ProtectedRoute><POS /></ProtectedRoute>} />
@@ -49,12 +64,23 @@ const App = () => (
             <Route path="/reports" element={<ProtectedRoute><Reports /></ProtectedRoute>} />
             <Route path="/settings" element={<ProtectedRoute><Settings /></ProtectedRoute>} />
             <Route path="/install" element={<Install />} />
-          {/* ADD ALL CUSTOM ROUTES ABOVE THE CATCH-ALL "*" ROUTE */}
-          <Route path="*" element={<NotFound />} />
-        </Routes>
+
+            {/* SysAdmin Routes */}
+            <Route path="/sysadmin/login" element={<SysAdminLogin />} />
+            <Route path="/sysadmin/dashboard" element={<SysAdminProtectedRoute><SysAdminDashboard /></SysAdminProtectedRoute>} />
+            <Route path="/sysadmin/tenants" element={<SysAdminProtectedRoute><SysAdminTenants /></SysAdminProtectedRoute>} />
+            <Route path="/sysadmin/activity" element={<SysAdminProtectedRoute><SysAdminActivity /></SysAdminProtectedRoute>} />
+            <Route path="/sysadmin/users" element={<SysAdminProtectedRoute><SysAdminUsers /></SysAdminProtectedRoute>} />
+            <Route path="/sysadmin/analytics" element={<SysAdminProtectedRoute><SysAdminAnalytics /></SysAdminProtectedRoute>} />
+            <Route path="/sysadmin/settings" element={<SysAdminProtectedRoute><SysAdminSettings /></SysAdminProtectedRoute>} />
+
+            {/* ADD ALL CUSTOM ROUTES ABOVE THE CATCH-ALL "*" ROUTE */}
+            <Route path="*" element={<NotFound />} />
+          </Routes>
+        </Suspense>
       </BrowserRouter>
     </TooltipProvider>
-  </QueryClientProvider>
+  </QueryClientProvider >
 );
 
 export default App;

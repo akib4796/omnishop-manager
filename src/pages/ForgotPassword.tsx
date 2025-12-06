@@ -1,7 +1,7 @@
 import { useState } from "react";
 import { Link } from "react-router-dom";
 import { useTranslation } from "react-i18next";
-import { supabase } from "@/integrations/supabase/client";
+import { resetPassword } from "@/integrations/appwrite";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
@@ -21,11 +21,9 @@ export default function ForgotPassword() {
     setLoading(true);
 
     try {
-      const { error } = await supabase.auth.resetPasswordForEmail(email, {
-        redirectTo: `${window.location.origin}/login`,
-      });
+      const { error } = await resetPassword(email);
 
-      if (error) throw error;
+      if (error) throw new Error(error);
 
       setSent(true);
       toast.success(t("auth.resetLinkSent"));
@@ -46,7 +44,7 @@ export default function ForgotPassword() {
         <CardHeader className="space-y-1 text-center">
           <CardTitle className="text-2xl font-bold">{t("auth.resetPassword")}</CardTitle>
           <CardDescription>
-            {sent 
+            {sent
               ? t("auth.checkEmail")
               : t("auth.enterEmailForReset")
             }

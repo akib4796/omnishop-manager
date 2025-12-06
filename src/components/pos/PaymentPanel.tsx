@@ -8,10 +8,13 @@ import { Label } from "@/components/ui/label";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Separator } from "@/components/ui/separator";
 import { toast } from "sonner";
-import { supabase } from "@/integrations/supabase/client";
+import { account } from "@/integrations/appwrite";
+import { getProductById, updateProductStock } from "@/integrations/appwrite/products";
+import { createPendingSale, SaleData } from "@/integrations/appwrite/sales";
 import { savePendingSale } from "@/lib/offline-db";
 import { syncManager } from "@/lib/sync-manager";
 import { toBengaliNumerals } from "@/lib/i18n-utils";
+import { useAuth } from "@/hooks/useAuth";
 
 interface PaymentPanelProps {
   customers: any[];
@@ -46,6 +49,8 @@ export default function PaymentPanel({
 }: PaymentPanelProps) {
   const { t, i18n } = useTranslation();
   const [processing, setProcessing] = useState(false);
+  const { profile } = useAuth();
+  const tenantId = profile?.tenantId;
 
   const formatPrice = (price: number) => {
     const formatted = Math.round(price).toLocaleString("en-BD");
@@ -55,26 +60,22 @@ export default function PaymentPanel({
   const handlePayment = async (paymentMethod: string) => {
     if (cart.length === 0) return;
     if (processing) return;
+    if (!tenantId) {
+      toast.error("No tenant found");
+      return;
+    }
 
     setProcessing(true);
 
     try {
-      const { data: { user } } = await supabase.auth.getUser();
+      const user = await account.get();
       if (!user) throw new Error("Not authenticated");
 
-      const { data: profile } = await supabase
-        .from('profiles')
-        .select('tenant_id')
-        .eq('id', user.id)
-        .single();
-
-      if (!profile) throw new Error("Profile not found");
-
-      const saleData = {
-        tenant_id: profile.tenant_id,
-        customer_id: selectedCustomer?.id || null,
-        items: cart.map(item => ({
-          product_id: item.product_id,
+      const saleData: SaleData = {
+        tenantId: tenantId,
+        customerId: selectedCustomer?.id || null,
+        items: cart.map((item: any) => ({
+          productId: item.productId || item.product_id,
           quantity: item.quantity,
           price: item.price,
         })),
@@ -82,39 +83,31 @@ export default function PaymentPanel({
         discount,
         tax,
         total,
-        payment_method: paymentMethod,
+        paymentMethod: paymentMethod,
         notes,
-        cashier_id: user.id,
-        completed_at: new Date().toISOString(),
+        cashierId: user.$id,
+        completedAt: new Date().toISOString(),
       };
 
       if (isOnline) {
-        const saleId = crypto.randomUUID();
-        
-        const { error } = await supabase
-          .from('pending_sales')
-          .insert({
-            id: saleId,
-            tenant_id: profile.tenant_id,
-            sale_data: saleData,
-            synced: true,
-            synced_at: new Date().toISOString(),
-          });
+        // Create sale in Appwrite
+        await createPendingSale({
+          tenantId: tenantId,
+          saleData: saleData,
+          synced: true,
+          syncedAt: new Date().toISOString(),
+        });
 
-        if (error) throw error;
-
+        // Update product stock on server
         for (const item of cart) {
-          const { data: product } = await supabase
-            .from('products')
-            .select('current_stock')
-            .eq('id', item.product_id)
-            .single();
-
-          if (product) {
-            await supabase
-              .from('products')
-              .update({ current_stock: product.current_stock - item.quantity })
-              .eq('id', item.product_id);
+          const productId = item.productId || item.product_id;
+          try {
+            const product = await getProductById(productId);
+            if (product) {
+              await updateProductStock(productId, (product.currentStock || 0) - item.quantity);
+            }
+          } catch (err) {
+            console.error(`Failed to update stock for ${productId}:`, err);
           }
         }
 
@@ -124,17 +117,25 @@ export default function PaymentPanel({
         }
         toast.success(t("pos.saleCompleted"));
       } else {
-        const saleId = crypto.randomUUID();
-        
+        // Save to local IndexedDB for later sync
         await savePendingSale({
-          id: saleId,
-          tenant_id: profile.tenant_id,
-          sale_data: saleData,
+          id: crypto.randomUUID(),
+          tenant_id: tenantId,
+          sale_data: {
+            ...saleData,
+            items: cart.map((item: any) => ({
+              product_id: item.productId || item.product_id,
+              quantity: item.quantity,
+              price: item.price,
+            })),
+          },
           created_at: new Date().toISOString(),
         });
 
+        // Update local stock
         for (const item of cart) {
-          await syncManager.decrementStockLocally(item.product_id, item.quantity);
+          const productId = item.productId || item.product_id;
+          await syncManager.decrementStockLocally(productId, item.quantity);
         }
 
         if (navigator.vibrate) {
@@ -142,7 +143,7 @@ export default function PaymentPanel({
         }
         toast.success(t("pos.offlineSale"));
         toast.info(t("pos.willSyncLater"));
-        
+
         await onLoadPendingSales();
       }
 
@@ -197,7 +198,7 @@ export default function PaymentPanel({
             <span className="text-muted-foreground">{t("pos.subtotal")}</span>
             <span className="font-medium">{formatPrice(subtotal)}</span>
           </div>
-          
+
           <div className="flex justify-between items-center">
             <Label htmlFor="discount">{t("pos.discount")}</Label>
             <Input

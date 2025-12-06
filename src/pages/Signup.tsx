@@ -1,7 +1,7 @@
 import { useState } from "react";
 import { useNavigate, Link } from "react-router-dom";
 import { useTranslation } from "react-i18next";
-import { supabase } from "@/integrations/supabase/client";
+import { signUp } from "@/integrations/appwrite";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
@@ -36,22 +36,13 @@ export default function Signup() {
     setLoading(true);
 
     try {
-      const { data, error } = await supabase.auth.signUp({
-        email,
-        password,
-        options: {
-          data: {
-            full_name: fullName,
-            phone,
-          },
-          emailRedirectTo: `${window.location.origin}/setup`,
-        },
-      });
+      const { user, error } = await signUp(email, password, fullName);
 
-      if (error) throw error;
+      if (error) throw new Error(error);
 
-      if (data.user) {
+      if (user) {
         toast.success(t("auth.accountCreated"));
+        // Navigate to setup page to create tenant
         navigate("/setup");
       }
     } catch (error: any) {

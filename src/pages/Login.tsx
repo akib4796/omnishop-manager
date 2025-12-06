@@ -1,7 +1,7 @@
 import { useState, useEffect } from "react";
 import { useNavigate, Link } from "react-router-dom";
 import { useTranslation } from "react-i18next";
-import { supabase } from "@/integrations/supabase/client";
+import { account, getCurrentUser, signIn } from "@/integrations/appwrite";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
@@ -19,8 +19,8 @@ export default function Login() {
 
   useEffect(() => {
     // Check if user is already logged in
-    supabase.auth.getSession().then(({ data: { session } }) => {
-      if (session) {
+    getCurrentUser().then((user) => {
+      if (user) {
         navigate("/dashboard");
       }
     });
@@ -31,14 +31,11 @@ export default function Login() {
     setLoading(true);
 
     try {
-      const { data, error } = await supabase.auth.signInWithPassword({
-        email,
-        password,
-      });
+      const { session, error } = await signIn(email, password);
 
-      if (error) throw error;
+      if (error) throw new Error(error);
 
-      if (data.session) {
+      if (session) {
         toast.success(t("common.success"));
         navigate("/dashboard");
       }

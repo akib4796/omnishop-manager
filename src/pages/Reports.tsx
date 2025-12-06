@@ -6,7 +6,7 @@ import { LanguageSwitcher } from "@/components/LanguageSwitcher";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Button } from "@/components/ui/button";
-import { supabase } from "@/integrations/supabase/client";
+import { supabase } from "@/integrations/appwrite";
 import { getPendingSales } from "@/lib/offline-db";
 import { toBengaliNumerals } from "@/lib/i18n-utils";
 import { FileDown, TrendingUp } from "lucide-react";

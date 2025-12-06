@@ -11,15 +11,23 @@ import { Button } from "@/components/ui/button";
 import { Pencil, Trash2 } from "lucide-react";
 import { Badge } from "@/components/ui/badge";
 import { formatCurrency, toBengaliNumerals } from "@/lib/i18n-utils";
+import { Product, Category } from "@/integrations/appwrite";
 
 interface ProductsTableProps {
-  products: any[];
-  onEdit: (product: any) => void;
+  products: Product[];
+  categories: Category[];
+  onEdit: (product: Product) => void;
   onDelete: (productId: string) => void;
 }
 
-export function ProductsTable({ products, onEdit, onDelete }: ProductsTableProps) {
+export function ProductsTable({ products, categories, onEdit, onDelete }: ProductsTableProps) {
   const { t, i18n } = useTranslation();
+
+  // Helper to get category info
+  const getCategory = (categoryId?: string) => {
+    if (!categoryId) return null;
+    return categories.find(c => c.$id === categoryId);
+  };
 
   return (
     <div className="border rounded-lg">
@@ -37,19 +45,21 @@ export function ProductsTable({ products, onEdit, onDelete }: ProductsTableProps
         </TableHeader>
         <TableBody>
           {products.map((product) => {
-            const isLowStock = product.current_stock <= product.low_stock_threshold;
+            const isLowStock = product.currentStock <= product.lowStockThreshold;
+            const category = getCategory(product.categoryId);
+
             return (
-              <TableRow key={product.id}>
+              <TableRow key={product.$id}>
                 <TableCell className="font-medium">{product.name}</TableCell>
                 <TableCell>
-                  {product.categories && (
+                  {category && (
                     <Badge
                       style={{
-                        backgroundColor: product.categories.color + "20",
-                        color: product.categories.color,
+                        backgroundColor: (category.color || '#6B7280') + "20",
+                        color: category.color || '#6B7280',
                       }}
                     >
-                      {product.categories.name}
+                      {category.name}
                     </Badge>
                   )}
                 </TableCell>
@@ -57,16 +67,16 @@ export function ProductsTable({ products, onEdit, onDelete }: ProductsTableProps
                 <TableCell className="text-right">
                   <span className={isLowStock ? "text-destructive font-semibold" : ""}>
                     {i18n.language === "bn"
-                      ? toBengaliNumerals(product.current_stock)
-                      : product.current_stock}{" "}
+                      ? toBengaliNumerals(product.currentStock)
+                      : product.currentStock}{" "}
                     {product.unit}
                   </span>
                 </TableCell>
                 <TableCell className="text-right">
-                  {formatCurrency(product.purchase_price, "BDT", i18n.language)}
+                  {formatCurrency(product.purchasePrice, "BDT", i18n.language)}
                 </TableCell>
                 <TableCell className="text-right">
-                  {formatCurrency(product.selling_price, "BDT", i18n.language)}
+                  {formatCurrency(product.sellingPrice, "BDT", i18n.language)}
                 </TableCell>
                 <TableCell className="text-right">
                   <div className="flex justify-end gap-2">
@@ -80,7 +90,7 @@ export function ProductsTable({ products, onEdit, onDelete }: ProductsTableProps
                     <Button
                       variant="ghost"
                       size="icon"
-                      onClick={() => onDelete(product.id)}
+                      onClick={() => onDelete(product.$id)}
                     >
                       <Trash2 className="h-4 w-4" />
                     </Button>

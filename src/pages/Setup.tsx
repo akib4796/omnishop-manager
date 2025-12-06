@@ -1,7 +1,7 @@
 import { useState, useEffect } from "react";
 import { useNavigate } from "react-router-dom";
 import { useTranslation } from "react-i18next";
-import { supabase } from "@/integrations/supabase/client";
+import { account, getCurrentUser, databases, DATABASE_ID, COLLECTIONS, ID, createTenant, createUserProfile, createUserRole } from "@/integrations/appwrite";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
@@ -17,6 +17,8 @@ export default function Setup() {
   const [step, setStep] = useState(1);
   const [loading, setLoading] = useState(false);
   const [userId, setUserId] = useState<string | null>(null);
+  const [userEmail, setUserEmail] = useState<string>("");
+  const [userFullName, setUserFullName] = useState<string>("");
 
   // Step 1: Business Info
   const [businessName, setBusinessName] = useState("");
@@ -33,11 +35,13 @@ export default function Setup() {
 
   useEffect(() => {
     // Check if user is logged in
-    supabase.auth.getSession().then(({ data: { session } }) => {
-      if (!session) {
+    getCurrentUser().then((user) => {
+      if (!user) {
         navigate("/login");
       } else {
-        setUserId(session.user.id);
+        setUserId(user.$id);
+        setUserEmail(user.email || "");
+        setUserFullName(user.name || "");
       }
     });
   }, [navigate]);
@@ -48,48 +52,36 @@ export default function Setup() {
 
     try {
       // 1. Create tenant
-      const { data: tenant, error: tenantError } = await supabase
-        .from("tenants")
-        .insert({
-          business_name: businessName,
-          business_type: businessType,
-          logo_url: logoUrl || null,
-          address,
-          currency,
-          tax_rate: parseFloat(taxRate),
-          default_language: defaultLanguage,
-        })
-        .select()
-        .single();
+      const { tenant, error: tenantError } = await createTenant({
+        business_name: businessName,
+        business_type: businessType,
+        logo_url: logoUrl || undefined,
+        address,
+        currency,
+        tax_rate: parseFloat(taxRate),
+        default_language: defaultLanguage,
+      });
 
-      if (tenantError) throw tenantError;
+      if (tenantError || !tenant) throw new Error(tenantError || "Failed to create tenant");
 
-      // 2. Get user metadata
-      const { data: { user } } = await supabase.auth.getUser();
-      
-      // 3. Create profile
-      const { error: profileError } = await supabase
-        .from("profiles")
-        .insert({
-          id: userId,
-          tenant_id: tenant.id,
-          full_name: user?.user_metadata?.full_name || "",
-          email: user?.email || "",
-          phone: user?.user_metadata?.phone || "",
-        });
+      // 2. Create profile
+      const { error: profileError } = await createUserProfile({
+        user_id: userId,
+        tenant_id: tenant.$id,
+        full_name: userFullName,
+        email: userEmail,
+      });
 
-      if (profileError) throw profileError;
+      if (profileError) throw new Error(profileError);
 
-      // 4. Create admin role
-      const { error: roleError } = await supabase
-        .from("user_roles")
-        .insert({
-          user_id: userId,
-          tenant_id: tenant.id,
-          role: "admin",
-        });
+      // 3. Create admin role
+      const { error: roleError } = await createUserRole({
+        user_id: userId,
+        tenant_id: tenant.$id,
+        role: "admin",
+      });
 
-      if (roleError) throw roleError;
+      if (roleError) throw new Error(roleError);
 
       toast.success(t("wizard.setupComplete"));
       navigate("/dashboard");
@@ -273,9 +265,8 @@ export default function Setup() {
             {[1, 2, 3, 4].map((s) => (
               <div
                 key={s}
-                className={`h-2 w-12 rounded-full transition-colors ${
-                  s <= step ? "bg-primary" : "bg-muted"
-                }`}
+                className={`h-2 w-12 rounded-full transition-colors ${s <= step ? "bg-primary" : "bg-muted"
+                  }`}
               />
             ))}
           </div>
