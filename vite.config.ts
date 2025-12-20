@@ -15,13 +15,13 @@ export default defineConfig(({ mode }) => ({
     mode === "development" && componentTagger(),
     VitePWA({
       registerType: "autoUpdate",
-      includeAssets: ["favicon.ico", "robots.txt", "apple-touch-icon.png"],
+      includeAssets: ["favicon.ico", "favicon-32.png", "robots.txt", "apple-touch-icon.png"],
       manifest: {
-        name: "OmniManager - POS & Inventory",
-        short_name: "OmniManager",
+        name: "BanikPro - POS & Inventory",
+        short_name: "BanikPro",
         description: "Complete offline-first POS and inventory management system for Bangladesh",
-        theme_color: "#006A4E",
-        background_color: "#F42A41",
+        theme_color: "#1a365d",
+        background_color: "#1a365d",
         display: "standalone",
         orientation: "portrait",
         start_url: "/",
