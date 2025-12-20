@@ -11,14 +11,13 @@ import {
     History,
     BarChart3,
     Users,
-    Receipt,
     UserCog,
     Settings,
     LogOut,
     Menu,
-    X,
+    FileText,
+    Landmark,
 } from "lucide-react";
-import { Button } from "@/components/ui/button";
 import {
     Sheet,
     SheetContent,
@@ -30,9 +29,23 @@ import {
 import { toast } from "sonner";
 import { cn } from "@/lib/utils";
 
+// Menu item type
+interface MenuItem {
+    title: string;
+    url: string;
+    icon: any;
+    staffAllowed: boolean;
+}
+
+// Menu group type
+interface MenuGroup {
+    label: string;
+    items: MenuItem[];
+}
+
 /**
  * POSNavSheet - Navigation sheet component for POS page
- * Uses the same logic as MobileNavSheet but with POS dark theme styling
+ * Uses grouped box-style layout matching the main sidebar
  */
 export function POSNavSheet() {
     const { t } = useTranslation();
@@ -43,30 +56,61 @@ export function POSNavSheet() {
     const currentPath = location.pathname;
     const permissions = profile?.role?.permissions || [];
 
-    const menuItems = [
-        { title: t("menu.dashboard"), url: "/dashboard", icon: LayoutDashboard, staffAllowed: false, color: "text-blue-400" },
-        { title: t("menu.pos"), url: "/pos", icon: ShoppingCart, staffAllowed: true, color: "text-amber-400" },
-        { title: t("menu.products"), url: "/products", icon: Package, staffAllowed: true, color: "text-orange-400" },
-        { title: t("menu.purchases"), url: "/inventory", icon: ShoppingBag, staffAllowed: true, color: "text-green-400" },
-        { title: t("menu.salesHistory"), url: "/sales-history", icon: History, staffAllowed: false, color: "text-cyan-400" },
-        { title: t("menu.reports"), url: "/reports", icon: BarChart3, staffAllowed: false, color: "text-indigo-400" },
-        { title: t("menu.customers"), url: "/customers", icon: Users, staffAllowed: true, color: "text-purple-400" },
-        { title: t("menu.expenses"), url: "/expenses", icon: Receipt, staffAllowed: false, color: "text-pink-400" },
-        { title: t("menu.staff"), url: "/staff", icon: UserCog, staffAllowed: false, color: "text-teal-400" },
-        { title: t("menu.settings"), url: "/settings", icon: Settings, staffAllowed: false, color: "text-slate-400" },
+    // Grouped menu structure matching the sidebar
+    const menuGroups: MenuGroup[] = [
+        {
+            label: "DASHBOARD",
+            items: [
+                { title: t("menu.dashboard"), url: "/dashboard", icon: LayoutDashboard, staffAllowed: false },
+            ],
+        },
+        {
+            label: "SALES",
+            items: [
+                { title: t("menu.pos"), url: "/pos", icon: ShoppingCart, staffAllowed: true },
+                { title: t("menu.salesHistory"), url: "/sales-history", icon: History, staffAllowed: false },
+                { title: t("menu.customers"), url: "/customers", icon: Users, staffAllowed: true },
+                { title: t("menu.quotations", "Quotations"), url: "/quotations", icon: FileText, staffAllowed: true },
+            ],
+        },
+        {
+            label: "PURCHASING",
+            items: [
+                { title: t("menu.purchases"), url: "/inventory", icon: ShoppingBag, staffAllowed: true },
+            ],
+        },
+        {
+            label: "INVENTORY",
+            items: [
+                { title: t("menu.products"), url: "/products", icon: Package, staffAllowed: true },
+            ],
+        },
+        {
+            label: "FINANCE",
+            items: [
+                { title: "Accounting", url: "/accounting", icon: Landmark, staffAllowed: false },
+                { title: t("menu.reports"), url: "/reports", icon: BarChart3, staffAllowed: false },
+            ],
+        },
+        {
+            label: "SETTINGS",
+            items: [
+                { title: t("menu.staff"), url: "/staff", icon: UserCog, staffAllowed: false },
+                { title: t("menu.settings"), url: "/settings", icon: Settings, staffAllowed: false },
+            ],
+        },
     ];
 
     const isActive = (path: string) => currentPath === path;
 
     // Filter items based on staff label
-    const filteredItems = menuItems.filter(item => {
+    const filterItem = (item: MenuItem): boolean => {
         if (isStaff) {
             return item.staffAllowed;
         }
-        // For non-staff (admin/owner), show all items
         if (!profile?.role) return true;
-        return permissions.includes(item.url.replace("/", ""));
-    });
+        return true; // Show all for non-staff
+    };
 
     const handleLogout = async () => {
         const { error } = await signOut();
@@ -86,44 +130,61 @@ export function POSNavSheet() {
             </SheetTrigger>
             <SheetContent
                 side="left"
-                className="w-72 p-0 bg-slate-900 border-slate-700 text-white"
+                className="w-64 p-0 bg-slate-900 border-slate-700 text-white flex flex-col h-full"
             >
-                <SheetHeader className="p-4 border-b border-slate-700">
-                    <SheetTitle className="text-left text-white">{t("appName")}</SheetTitle>
+                <SheetHeader className="px-3 py-2 border-b border-slate-700 shrink-0">
+                    <SheetTitle className="text-left text-primary font-bold text-base">BechaKenaPro</SheetTitle>
                 </SheetHeader>
 
-                <nav className="flex-1 overflow-y-auto py-4">
-                    <div className="space-y-1 px-2">
-                        {filteredItems.map((item) => (
-                            <SheetClose asChild key={item.url}>
-                                <Link
-                                    to={item.url}
-                                    className={cn(
-                                        "flex items-center gap-3 px-3 py-2.5 rounded-lg text-sm font-medium transition-colors",
-                                        isActive(item.url)
-                                            ? "bg-primary text-primary-foreground"
-                                            : "text-slate-200 hover:bg-slate-800"
-                                    )}
-                                >
-                                    <item.icon className={cn("h-5 w-5", item.color)} />
-                                    <span>{item.title}</span>
-                                </Link>
-                            </SheetClose>
-                        ))}
+                <nav className="flex-1 py-1 px-1.5 space-y-1 overflow-hidden">
+                    {/* Menu Groups with Compact Box Style */}
+                    {menuGroups.map((group) => {
+                        const filteredItems = group.items.filter(filterItem);
+                        if (filteredItems.length === 0) return null;
 
-                        <div className="border-t border-slate-700 my-3" />
+                        return (
+                            <div
+                                key={group.label}
+                                className="rounded-md border border-slate-700 bg-slate-800/50 p-1"
+                            >
+                                <div className="text-[9px] font-semibold text-slate-400 uppercase tracking-wider px-1.5 py-0.5">
+                                    {group.label}
+                                </div>
+                                <div>
+                                    {filteredItems.map((item) => (
+                                        <SheetClose asChild key={item.url}>
+                                            <Link
+                                                to={item.url}
+                                                className={cn(
+                                                    "flex items-center gap-2 px-2 py-1.5 rounded text-xs font-medium transition-colors",
+                                                    isActive(item.url)
+                                                        ? "bg-primary text-primary-foreground"
+                                                        : "text-slate-200 hover:bg-slate-700 hover:text-white"
+                                                )}
+                                            >
+                                                <item.icon className="h-3.5 w-3.5" />
+                                                <span>{item.title}</span>
+                                            </Link>
+                                        </SheetClose>
+                                    ))}
+                                </div>
+                            </div>
+                        );
+                    })}
 
+                    {/* Logout */}
+                    <div className="rounded-md border border-slate-700 bg-slate-800/50 p-1">
                         <button
                             onClick={handleLogout}
-                            className="flex items-center gap-3 px-3 py-2.5 rounded-lg text-sm font-medium transition-colors hover:bg-slate-800 w-full text-left text-red-400"
+                            className="flex items-center gap-2 px-2 py-1.5 rounded text-xs font-medium transition-colors hover:bg-red-900/30 w-full text-left text-red-400 hover:text-red-300"
                         >
-                            <LogOut className="h-5 w-5" />
+                            <LogOut className="h-3.5 w-3.5" />
                             <span>{t("auth.logout")}</span>
                         </button>
                     </div>
                 </nav>
 
-                <div className="border-t border-slate-700 p-4">
+                <div className="border-t border-slate-700 p-2 shrink-0">
                     <LanguageSwitcher />
                 </div>
             </SheetContent>
