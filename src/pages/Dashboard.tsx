@@ -1,6 +1,5 @@
 import { useEffect, useState } from "react";
 import { useTranslation } from "react-i18next";
-import { supabase } from "@/integrations/appwrite";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
@@ -10,11 +9,20 @@ import { getPendingSales } from "@/lib/offline-db";
 import { syncManager } from "@/lib/sync-manager";
 import { toBengaliNumerals } from "@/lib/i18n-utils";
 import { toast } from "sonner";
-import { seedTestData } from "@/lib/seed-data";
 import { cn } from "@/lib/utils";
+import { useAuth } from "@/hooks/useAuth";
+import {
+  getTenantName,
+  getProductsCount,
+  getCustomersCount,
+  getMonthlySalesTotal
+} from "@/integrations/appwrite/dashboard";
 
 export default function Dashboard() {
   const { t, i18n } = useTranslation();
+  const { profile, isLoading: authLoading } = useAuth();
+  const tenantId = profile?.tenantId;
+
   const [tenantName, setTenantName] = useState("");
   const [isOnline, setIsOnline] = useState(navigator.onLine);
   const [pendingSalesCount, setPendingSalesCount] = useState(0);
@@ -22,11 +30,14 @@ export default function Dashboard() {
   const [lastSyncTime, setLastSyncTime] = useState<Date | null>(null);
   const [productsCount, setProductsCount] = useState(0);
   const [customersCount, setCustomersCount] = useState(0);
+  const [monthlySales, setMonthlySales] = useState(0);
   const [showBanner, setShowBanner] = useState(true);
 
   useEffect(() => {
+    if (authLoading || !tenantId) return;
+
     fetchDashboardData();
-    seedTestData();
+    // seedTestData(); // Removed to fix 404
 
     const handleOnline = () => {
       setIsOnline(true);
@@ -61,44 +72,24 @@ export default function Dashboard() {
       clearInterval(syncInterval);
       unsubscribe();
     };
-  }, []);
+  }, [authLoading, tenantId]);
 
   async function fetchDashboardData() {
+    if (!tenantId) return;
+
     try {
-      const { data: { user } } = await supabase.auth.getUser();
-      if (!user) return;
+      // Fetch all dashboard metrics in parallel
+      const [name, products, customers, sales] = await Promise.all([
+        getTenantName(tenantId),
+        getProductsCount(tenantId),
+        getCustomersCount(tenantId),
+        getMonthlySalesTotal(tenantId),
+      ]);
 
-      const { data: profile } = await supabase
-        .from("profiles")
-        .select("tenant_id")
-        .eq("id", user.id)
-        .single();
-
-      if (profile) {
-        const { data: tenant } = await supabase
-          .from("tenants")
-          .select("business_name")
-          .eq("id", profile.tenant_id)
-          .single();
-
-        if (tenant) {
-          setTenantName(tenant.business_name);
-        }
-
-        const { count: productsCount } = await supabase
-          .from("products")
-          .select("*", { count: 'exact', head: true })
-          .eq("tenant_id", profile.tenant_id);
-
-        setProductsCount(productsCount || 0);
-
-        const { count: customersCount } = await supabase
-          .from("customers")
-          .select("*", { count: 'exact', head: true })
-          .eq("tenant_id", profile.tenant_id);
-
-        setCustomersCount(customersCount || 0);
-      }
+      setTenantName(name);
+      setProductsCount(products);
+      setCustomersCount(customers);
+      setMonthlySales(sales);
 
       await loadPendingSales();
     } catch (error) {
@@ -128,9 +119,14 @@ export default function Dashboard() {
     return i18n.language === "bn" ? toBengaliNumerals(count) : count;
   };
 
+  const formatCurrency = (amount: number) => {
+    const formatted = Math.round(amount).toLocaleString("en-BD");
+    return i18n.language === "bn" ? `৳${toBengaliNumerals(formatted)}` : `৳${formatted}`;
+  };
+
   const formatTime = () => {
     if (!lastSyncTime) return t("sync.justNow");
-    
+
     const diff = Math.floor((Date.now() - lastSyncTime.getTime()) / 60000);
     if (diff === 0) return t("sync.justNow");
     return t("sync.minutesAgo", { minutes: formatCount(diff) });
@@ -139,7 +135,7 @@ export default function Dashboard() {
   const stats = [
     {
       title: t("dashboard.totalSales"),
-      value: "৳ 0",
+      value: formatCurrency(monthlySales),
       icon: ShoppingCart,
       description: t("dashboard.thisMonth"),
       color: "text-primary",
@@ -160,12 +156,22 @@ export default function Dashboard() {
     },
     {
       title: t("dashboard.revenue"),
-      value: "৳ 0",
+      value: formatCurrency(monthlySales),
       icon: BarChart3,
       description: t("dashboard.thisMonth"),
       color: "text-warning",
     },
   ];
+
+  if (authLoading) {
+    return (
+      <ResponsiveLayout title={t("menu.dashboard")}>
+        <div className="flex items-center justify-center h-64">
+          <RefreshCw className="h-8 w-8 animate-spin text-muted-foreground" />
+        </div>
+      </ResponsiveLayout>
+    );
+  }
 
   return (
     <ResponsiveLayout title={t("menu.dashboard")}>
@@ -184,8 +190,8 @@ export default function Dashboard() {
                 <CheckCircle className="h-6 w-6 text-success shrink-0 mt-0.5" />
                 <div>
                   <h3 className="font-bold text-base md:text-lg text-success">
-                    {i18n.language === "bn" 
-                      ? "OMNIMANAGER এখন ১০০% রেসপন্সিভ এবং ক্যাশিয়ার-পারফেক্ট" 
+                    {i18n.language === "bn"
+                      ? "OMNIMANAGER এখন ১০০% রেসপন্সিভ এবং ক্যাশিয়ার-পারফেক্ট"
                       : "OMNIMANAGER IS NOW 100% RESPONSIVE & CASHIER-PERFECT"}
                   </h3>
                   <p className="text-sm text-muted-foreground mt-1">
@@ -201,7 +207,7 @@ export default function Dashboard() {
 
         {/* Welcome Section */}
         <div>
-          <h2 className="text-2xl md:text-3xl font-bold">{t("common.welcome")}, {tenantName}</h2>
+          <h2 className="text-2xl md:text-3xl font-bold">{t("common.welcome")}, {tenantName || 'User'}</h2>
           <p className="text-muted-foreground mt-1 text-sm md:text-base">
             {t("dashboard.businessToday")}
           </p>

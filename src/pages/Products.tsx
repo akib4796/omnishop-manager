@@ -3,6 +3,7 @@ import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { useTranslation } from "react-i18next";
 import { AppSidebar } from "@/components/AppSidebar";
 import { SidebarProvider, SidebarInset } from "@/components/ui/sidebar";
+import { MobileNavSheet } from "@/components/MobileNavSheet";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Plus, Search, Download, Loader2 } from "lucide-react";
@@ -168,10 +169,13 @@ export default function Products() {
     <SidebarProvider>
       <AppSidebar />
       <SidebarInset>
-        <div className="p-6">
-          <div className="flex justify-between items-center mb-6">
-            <div>
-              <h1 className="text-3xl font-bold">{t("products.title")}</h1>
+        {/* Mobile Header with Navigation */}
+        <MobileNavSheet title={t("products.title")} />
+
+        <div className="p-4 md:p-6">
+          <div className="flex flex-col sm:flex-row sm:justify-between sm:items-start gap-4 mb-6">
+            <div className="hidden md:block">
+              <h1 className="text-xl md:text-3xl font-bold">{t("products.title")}</h1>
               {lowStockProducts && lowStockProducts.length > 0 && (
                 <p className="text-sm text-destructive mt-1">
                   {i18n.language === "bn"
@@ -184,7 +188,7 @@ export default function Products() {
             <div className="flex gap-2">
               <Button variant="outline" onClick={handleExportCSV}>
                 <Download className="h-4 w-4 mr-2" />
-                {t("products.exportCSV")}
+                <span className="hidden sm:inline">{t("products.exportCSV")}</span>
               </Button>
               <Button
                 onClick={() => {
@@ -193,12 +197,12 @@ export default function Products() {
                 }}
               >
                 <Plus className="h-4 w-4 mr-2" />
-                {t("products.addProduct")}
+                <span className="hidden sm:inline">{t("products.addProduct")}</span>
               </Button>
             </div>
           </div>
 
-          <div className="flex gap-4 mb-6">
+          <div className="flex flex-col sm:flex-row gap-4 mb-6">
             <div className="relative flex-1">
               <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 h-4 w-4 text-muted-foreground" />
               <Input
@@ -210,7 +214,7 @@ export default function Products() {
             </div>
             <div className="flex gap-2">
               <Select value={selectedCategory} onValueChange={setSelectedCategory}>
-                <SelectTrigger className="w-[200px]">
+                <SelectTrigger className="w-full sm:w-[200px]">
                   <SelectValue placeholder={t("products.selectCategory")} />
                 </SelectTrigger>
                 <SelectContent>

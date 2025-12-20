@@ -1,12 +1,12 @@
 import { useState } from "react";
 import { useQuery } from "@tanstack/react-query";
-import { supabase } from "@/integrations/appwrite";
 import { useTranslation } from "react-i18next";
 import { AppSidebar } from "@/components/AppSidebar";
 import { SidebarProvider, SidebarInset } from "@/components/ui/sidebar";
+import { MobileNavSheet } from "@/components/MobileNavSheet";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
-import { Search, Download, Eye } from "lucide-react";
+import { Search, Download, Eye, RefreshCw } from "lucide-react";
 import { formatCurrency, toBengaliNumerals } from "@/lib/i18n-utils";
 import { format } from "date-fns";
 import {
@@ -23,28 +23,30 @@ import {
   DialogHeader,
   DialogTitle,
 } from "@/components/ui/dialog";
+import { useAuth } from "@/hooks/useAuth";
+import { getCompletedSales, CompletedSale } from "@/integrations/appwrite/salesHistory";
 
 export default function SalesHistory() {
   const { t, i18n } = useTranslation();
+  const { profile, isLoading: authLoading } = useAuth();
+  const tenantId = profile?.tenantId;
+
   const [searchQuery, setSearchQuery] = useState("");
-  const [selectedSale, setSelectedSale] = useState<any>(null);
+  const [selectedSale, setSelectedSale] = useState<CompletedSale | null>(null);
   const [isReceiptOpen, setIsReceiptOpen] = useState(false);
 
   const { data: sales, isLoading } = useQuery({
-    queryKey: ["sales"],
+    queryKey: ["completed-sales", tenantId],
     queryFn: async () => {
-      const { data, error } = await supabase
-        .from("sales")
-        .select("*, customers(name), profiles(full_name)")
-        .order("created_at", { ascending: false });
-      if (error) throw error;
-      return data;
+      if (!tenantId) return [];
+      return getCompletedSales(tenantId);
     },
+    enabled: !!tenantId,
   });
 
   const filteredSales = sales?.filter((sale) =>
-    sale.customers?.name?.toLowerCase().includes(searchQuery.toLowerCase()) ||
-    sale.id.toLowerCase().includes(searchQuery.toLowerCase())
+    sale.customerName?.toLowerCase().includes(searchQuery.toLowerCase()) ||
+    sale.$id.toLowerCase().includes(searchQuery.toLowerCase())
   );
 
   const handleExportCSV = () => {
@@ -56,16 +58,14 @@ export default function SalesHistory() {
       "Customer",
       "Total",
       "Payment Method",
-      "Cashier",
     ];
 
     const rows = sales.map((s) => [
-      format(new Date(s.created_at), "yyyy-MM-dd HH:mm"),
-      s.id,
-      s.customers?.name || "Walk-in",
-      s.total_amount,
-      s.payment_method,
-      s.profiles?.full_name || "N/A",
+      format(new Date(s.createdAt), "yyyy-MM-dd HH:mm"),
+      s.$id,
+      s.customerName || "Walk-in",
+      s.totalAmount,
+      s.paymentMethod,
     ]);
 
     const csv = [headers, ...rows].map((row) => row.join(",")).join("\n");
@@ -77,7 +77,7 @@ export default function SalesHistory() {
     a.click();
   };
 
-  const handleViewReceipt = (sale: any) => {
+  const handleViewReceipt = (sale: CompletedSale) => {
     setSelectedSale(sale);
     setIsReceiptOpen(true);
   };
@@ -86,16 +86,42 @@ export default function SalesHistory() {
     window.print();
   };
 
+  const getPaymentMethodLabel = (method: string) => {
+    const methodLabels: Record<string, string> = {
+      cash: t("salesHistory.cash"),
+      card: t("salesHistory.card"),
+      bkash: t("salesHistory.bkash"),
+      nagad: t("salesHistory.nagad"),
+    };
+    return methodLabels[method] || method;
+  };
+
+  if (authLoading || !tenantId) {
+    return (
+      <SidebarProvider>
+        <AppSidebar />
+        <SidebarInset>
+          <div className="p-6 flex items-center justify-center h-64">
+            <RefreshCw className="h-8 w-8 animate-spin text-muted-foreground" />
+          </div>
+        </SidebarInset>
+      </SidebarProvider>
+    );
+  }
+
   return (
     <SidebarProvider>
       <AppSidebar />
       <SidebarInset>
-        <div className="p-6">
-          <div className="flex justify-between items-center mb-6">
-            <h1 className="text-3xl font-bold">{t("salesHistory.title")}</h1>
+        {/* Mobile Header with Navigation */}
+        <MobileNavSheet title={t("salesHistory.title")} />
+
+        <div className="p-4 md:p-6">
+          <div className="flex flex-col sm:flex-row sm:justify-between sm:items-center gap-4 mb-6">
+            <h1 className="hidden md:block text-xl md:text-3xl font-bold">{t("salesHistory.title")}</h1>
             <Button variant="outline" onClick={handleExportCSV}>
               <Download className="h-4 w-4 mr-2" />
-              {t("common.export")}
+              <span className="hidden sm:inline">{t("common.export")}</span>
             </Button>
           </div>
 
@@ -112,10 +138,12 @@ export default function SalesHistory() {
           </div>
 
           {isLoading ? (
-            <p>{t("common.loading")}</p>
+            <div className="flex items-center justify-center py-12">
+              <RefreshCw className="h-6 w-6 animate-spin text-muted-foreground" />
+            </div>
           ) : filteredSales && filteredSales.length > 0 ? (
-            <div className="border rounded-lg">
-              <Table>
+            <div className="border rounded-lg overflow-x-auto">
+              <Table className="min-w-[600px]">
                 <TableHeader>
                   <TableRow>
                     <TableHead>{t("common.date")}</TableHead>
@@ -123,33 +151,27 @@ export default function SalesHistory() {
                     <TableHead>{t("pos.customer")}</TableHead>
                     <TableHead>{t("common.total")}</TableHead>
                     <TableHead>{t("salesHistory.paymentMethod")}</TableHead>
-                    <TableHead>{t("salesHistory.cashier")}</TableHead>
                     <TableHead>{t("common.action")}</TableHead>
                   </TableRow>
                 </TableHeader>
                 <TableBody>
                   {filteredSales.map((sale) => (
-                    <TableRow key={sale.id} className="cursor-pointer hover:bg-muted/50">
+                    <TableRow key={sale.$id} className="cursor-pointer hover:bg-muted/50">
                       <TableCell>
                         {i18n.language === "bn"
-                          ? toBengaliNumerals(format(new Date(sale.created_at), "dd/MM/yyyy HH:mm"))
-                          : format(new Date(sale.created_at), "dd/MM/yyyy HH:mm")}
+                          ? toBengaliNumerals(format(new Date(sale.createdAt), "dd/MM/yyyy HH:mm"))
+                          : format(new Date(sale.createdAt), "dd/MM/yyyy HH:mm")}
                       </TableCell>
                       <TableCell className="font-mono text-xs">
-                        {sale.id.substring(0, 8)}...
+                        {sale.$id.substring(0, 8)}...
                       </TableCell>
-                      <TableCell>{sale.customers?.name || t("pos.walkIn")}</TableCell>
+                      <TableCell>{sale.customerName || t("pos.walkIn")}</TableCell>
                       <TableCell className="font-bold">
-                        {formatCurrency(sale.total_amount, i18n.language)}
+                        {formatCurrency(sale.totalAmount, i18n.language)}
                       </TableCell>
                       <TableCell>
-                        {sale.payment_method === "cash" && t("salesHistory.cash")}
-                        {sale.payment_method === "card" && t("salesHistory.card")}
-                        {sale.payment_method === "bkash" && t("salesHistory.bkash")}
-                        {sale.payment_method === "nagad" && t("salesHistory.nagad")}
-                        {!["cash", "card", "bkash", "nagad"].includes(sale.payment_method) && sale.payment_method}
+                        {getPaymentMethodLabel(sale.paymentMethod)}
                       </TableCell>
-                      <TableCell>{sale.profiles?.full_name || "N/A"}</TableCell>
                       <TableCell>
                         <Button
                           variant="ghost"
@@ -180,27 +202,21 @@ export default function SalesHistory() {
                   <div className="text-center border-b pb-4">
                     <h2 className="text-xl font-bold">{t("appName")}</h2>
                     <p className="text-sm text-muted-foreground">
-                      {format(new Date(selectedSale.created_at), "dd/MM/yyyy HH:mm")}
+                      {format(new Date(selectedSale.createdAt), "dd/MM/yyyy HH:mm")}
                     </p>
                   </div>
                   <div className="space-y-2">
                     <div className="flex justify-between">
                       <span>{t("pos.customer")}:</span>
-                      <span>{selectedSale.customers?.name || t("pos.walkIn")}</span>
+                      <span>{selectedSale.customerName || t("pos.walkIn")}</span>
                     </div>
                     <div className="flex justify-between">
                       <span>{t("salesHistory.paymentMethod")}:</span>
-                      <span>
-                        {selectedSale.payment_method === "cash" && t("salesHistory.cash")}
-                        {selectedSale.payment_method === "card" && t("salesHistory.card")}
-                        {selectedSale.payment_method === "bkash" && t("salesHistory.bkash")}
-                        {selectedSale.payment_method === "nagad" && t("salesHistory.nagad")}
-                        {!["cash", "card", "bkash", "nagad"].includes(selectedSale.payment_method) && selectedSale.payment_method}
-                      </span>
+                      <span>{getPaymentMethodLabel(selectedSale.paymentMethod)}</span>
                     </div>
                   </div>
                   <div className="border-t pt-4">
-                    {JSON.parse(selectedSale.items).map((item: any, idx: number) => (
+                    {selectedSale.items.map((item, idx) => (
                       <div key={idx} className="flex justify-between text-sm mb-2">
                         <span>
                           {item.name} x {item.qty}
@@ -213,25 +229,22 @@ export default function SalesHistory() {
                     <div className="flex justify-between">
                       <span>{t("pos.subtotal")}:</span>
                       <span>
-                        {formatCurrency(
-                          selectedSale.total_amount - selectedSale.tax_amount,
-                          i18n.language
-                        )}
+                        {formatCurrency(selectedSale.subtotal, i18n.language)}
                       </span>
                     </div>
-                    {selectedSale.discount_amount > 0 && (
+                    {selectedSale.discountAmount > 0 && (
                       <div className="flex justify-between text-destructive">
                         <span>{t("pos.discount")}:</span>
-                        <span>-{formatCurrency(selectedSale.discount_amount, i18n.language)}</span>
+                        <span>-{formatCurrency(selectedSale.discountAmount, i18n.language)}</span>
                       </div>
                     )}
                     <div className="flex justify-between">
                       <span>{t("pos.tax")}:</span>
-                      <span>{formatCurrency(selectedSale.tax_amount, i18n.language)}</span>
+                      <span>{formatCurrency(selectedSale.taxAmount, i18n.language)}</span>
                     </div>
                     <div className="flex justify-between font-bold text-lg">
                       <span>{t("common.total")}:</span>
-                      <span>{formatCurrency(selectedSale.total_amount, i18n.language)}</span>
+                      <span>{formatCurrency(selectedSale.totalAmount, i18n.language)}</span>
                     </div>
                   </div>
                   <Button onClick={handlePrintReceipt} className="w-full">

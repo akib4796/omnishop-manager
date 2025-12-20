@@ -63,7 +63,7 @@ export default function SysAdminDashboard() {
                     <div className="flex items-center gap-3">
                         <Shield className="h-10 w-10 text-purple-500" />
                         <div>
-                            <h1 className="text-3xl font-bold bg-gradient-to-r from-purple-600 to-blue-600 bg-clip-text text-transparent">
+                            <h1 className="text-xl md:text-3xl font-bold bg-gradient-to-r from-purple-600 to-blue-600 bg-clip-text text-transparent">
                                 SysAdmin Dashboard
                             </h1>
                             <p className="text-muted-foreground">

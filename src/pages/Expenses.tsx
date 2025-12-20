@@ -1,12 +1,12 @@
 import { useState } from "react";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
-import { supabase } from "@/integrations/appwrite";
 import { useTranslation } from "react-i18next";
 import { AppSidebar } from "@/components/AppSidebar";
 import { SidebarProvider, SidebarInset } from "@/components/ui/sidebar";
+import { MobileNavSheet } from "@/components/MobileNavSheet";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
-import { Plus, Download, Trash2 } from "lucide-react";
+import { Plus, Download, Trash2, RefreshCw } from "lucide-react";
 import { toast } from "sonner";
 import { formatCurrency, toBengaliNumerals } from "@/lib/i18n-utils";
 import { format } from "date-fns";
@@ -28,10 +28,20 @@ import {
 import { Label } from "@/components/ui/label";
 import { Textarea } from "@/components/ui/textarea";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
+import { useAuth } from "@/hooks/useAuth";
+import {
+  getExpenses,
+  createExpense,
+  deleteExpense,
+  Expense,
+} from "@/integrations/appwrite/expenses";
 
 export default function Expenses() {
   const { t, i18n } = useTranslation();
   const queryClient = useQueryClient();
+  const { profile, isLoading: authLoading, user } = useAuth();
+  const tenantId = profile?.tenantId;
+
   const [isDialogOpen, setIsDialogOpen] = useState(false);
   const [formData, setFormData] = useState({
     category: "",
@@ -41,43 +51,29 @@ export default function Expenses() {
   });
 
   const { data: expenses, isLoading } = useQuery({
-    queryKey: ["expenses"],
+    queryKey: ["expenses", tenantId],
     queryFn: async () => {
-      const { data, error } = await supabase
-        .from("expenses")
-        .select("*, profiles(full_name)")
-        .order("date", { ascending: false });
-      if (error) throw error;
-      return data;
+      if (!tenantId) return [];
+      return getExpenses(tenantId);
     },
+    enabled: !!tenantId,
   });
 
   const addExpenseMutation = useMutation({
-    mutationFn: async (data: any) => {
-      const { data: userData, error: authError } = await supabase.auth.getUser();
-      if (authError || !userData.user) throw new Error("Not authenticated");
+    mutationFn: async (data: { category: string; amount: string; note: string; date: string }) => {
+      if (!tenantId || !user) throw new Error("Not authenticated");
 
-      const { data: profile, error: profileError } = await supabase
-        .from("profiles")
-        .select("tenant_id")
-        .eq("id", userData.user.id)
-        .single();
-
-      if (profileError || !profile?.tenant_id) throw new Error("No tenant found");
-
-      const { error } = await supabase.from("expenses").insert({
+      return createExpense({
         category: data.category,
         amount: parseFloat(data.amount),
         date: data.date,
-        note: data.note || null,
-        tenant_id: profile.tenant_id,
-        created_by: userData.user.id,
+        note: data.note || undefined,
+        tenantId,
+        createdBy: user.$id,
       });
-      
-      if (error) throw error;
     },
     onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ["expenses"] });
+      queryClient.invalidateQueries({ queryKey: ["expenses", tenantId] });
       toast.success(t("expenses.expenseAdded"));
       setIsDialogOpen(false);
       setFormData({
@@ -95,14 +91,10 @@ export default function Expenses() {
 
   const deleteExpenseMutation = useMutation({
     mutationFn: async (expenseId: string) => {
-      const { error } = await supabase
-        .from("expenses")
-        .delete()
-        .eq("id", expenseId);
-      if (error) throw error;
+      return deleteExpense(expenseId);
     },
     onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ["expenses"] });
+      queryClient.invalidateQueries({ queryKey: ["expenses", tenantId] });
       toast.success(t("expenses.deleted"));
     },
     onError: () => {
@@ -112,10 +104,7 @@ export default function Expenses() {
 
   const handleSubmit = (e: React.FormEvent) => {
     e.preventDefault();
-    addExpenseMutation.mutate({
-      ...formData,
-      amount: parseFloat(formData.amount),
-    });
+    addExpenseMutation.mutate(formData);
   };
 
   const handleDelete = (expenseId: string) => {
@@ -127,13 +116,12 @@ export default function Expenses() {
   const handleExportCSV = () => {
     if (!expenses || expenses.length === 0) return;
 
-    const headers = ["Date", "Category", "Amount", "Note", "Created By"];
+    const headers = ["Date", "Category", "Amount", "Note"];
     const rows = expenses.map((e) => [
       format(new Date(e.date), "yyyy-MM-dd"),
       e.category,
       e.amount,
       e.note || "",
-      e.profiles?.full_name || "N/A",
     ]);
 
     const csv = [headers, ...rows].map((row) => row.join(",")).join("\n");
@@ -146,25 +134,41 @@ export default function Expenses() {
   };
 
   const monthlyTotal = expenses?.reduce(
-    (sum, e) => sum + parseFloat(String(e.amount)),
+    (sum, e) => sum + e.amount,
     0
   ) || 0;
+
+  if (authLoading || !tenantId) {
+    return (
+      <SidebarProvider>
+        <AppSidebar />
+        <SidebarInset>
+          <div className="p-6 flex items-center justify-center h-64">
+            <RefreshCw className="h-8 w-8 animate-spin text-muted-foreground" />
+          </div>
+        </SidebarInset>
+      </SidebarProvider>
+    );
+  }
 
   return (
     <SidebarProvider>
       <AppSidebar />
       <SidebarInset>
-        <div className="p-6">
-          <div className="flex justify-between items-center mb-6">
-            <h1 className="text-3xl font-bold">{t("expenses.title")}</h1>
+        {/* Mobile Header with Navigation */}
+        <MobileNavSheet title={t("expenses.title")} />
+
+        <div className="p-4 md:p-6">
+          <div className="flex flex-col sm:flex-row sm:justify-between sm:items-center gap-4 mb-6">
+            <h1 className="hidden md:block text-xl md:text-3xl font-bold">{t("expenses.title")}</h1>
             <div className="flex gap-2">
               <Button variant="outline" onClick={handleExportCSV}>
                 <Download className="h-4 w-4 mr-2" />
-                {t("common.export")}
+                <span className="hidden sm:inline">{t("common.export")}</span>
               </Button>
               <Button onClick={() => setIsDialogOpen(true)}>
                 <Plus className="h-4 w-4 mr-2" />
-                {t("expenses.addExpense")}
+                <span className="hidden sm:inline">{t("expenses.addExpense")}</span>
               </Button>
             </div>
           </div>
@@ -174,30 +178,31 @@ export default function Expenses() {
               <CardTitle>{t("expenses.monthlyTotal")}</CardTitle>
             </CardHeader>
             <CardContent>
-              <p className="text-3xl font-bold">
+              <p className="text-2xl md:text-3xl font-bold">
                 {formatCurrency(monthlyTotal, i18n.language)}
               </p>
             </CardContent>
           </Card>
 
           {isLoading ? (
-            <p>{t("common.loading")}</p>
+            <div className="flex items-center justify-center py-12">
+              <RefreshCw className="h-6 w-6 animate-spin text-muted-foreground" />
+            </div>
           ) : expenses && expenses.length > 0 ? (
-            <div className="border rounded-lg">
-              <Table>
+            <div className="border rounded-lg overflow-x-auto">
+              <Table className="min-w-[500px]">
                 <TableHeader>
                   <TableRow>
                     <TableHead>{t("common.date")}</TableHead>
                     <TableHead>{t("expenses.category")}</TableHead>
                     <TableHead>{t("expenses.amount")}</TableHead>
                     <TableHead>{t("expenses.note")}</TableHead>
-                    <TableHead>{t("expenses.createdBy")}</TableHead>
                     <TableHead>{t("common.action")}</TableHead>
                   </TableRow>
                 </TableHeader>
                 <TableBody>
-                  {expenses.map((expense) => (
-                    <TableRow key={expense.id}>
+                  {expenses.map((expense: Expense) => (
+                    <TableRow key={expense.$id}>
                       <TableCell>
                         {i18n.language === "bn"
                           ? toBengaliNumerals(format(new Date(expense.date), "dd/MM/yyyy"))
@@ -208,12 +213,11 @@ export default function Expenses() {
                         {formatCurrency(expense.amount, i18n.language)}
                       </TableCell>
                       <TableCell>{expense.note || "-"}</TableCell>
-                      <TableCell>{expense.profiles?.full_name || "N/A"}</TableCell>
                       <TableCell>
                         <Button
                           variant="ghost"
                           size="sm"
-                          onClick={() => handleDelete(expense.id)}
+                          onClick={() => handleDelete(expense.$id)}
                         >
                           <Trash2 className="h-4 w-4" />
                         </Button>

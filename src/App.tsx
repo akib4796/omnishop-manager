@@ -7,6 +7,7 @@ import { BrowserRouter, Routes, Route } from "react-router-dom";
 import { ProtectedRoute } from "./components/ProtectedRoute";
 import { SysAdminProtectedRoute } from "./components/SysAdminProtectedRoute";
 import { PWAInstallPrompt } from "@/components/PWAInstallPrompt";
+import { POSLayout } from "@/components/layout/POSLayout";
 import Index from "./pages/Index";
 
 const Login = lazy(() => import("./pages/Login"));
@@ -24,8 +25,11 @@ const Install = lazy(() => import("./pages/Install"));
 const NotFound = lazy(() => import("./pages/NotFound"));
 const SalesHistory = lazy(() => import("./pages/SalesHistory"));
 const Customers = lazy(() => import("./pages/Customers"));
-const Expenses = lazy(() => import("./pages/Expenses"));
+// const Expenses = lazy(() => import("./pages/Expenses")); // Superceded by Accounting
+const Accounting = lazy(() => import("./pages/Accounting"));
 const Staff = lazy(() => import("./pages/Staff"));
+const Quotations = lazy(() => import("./pages/Quotations"));
+const Unauthorized = lazy(() => import("./pages/Unauthorized"));
 
 // SysAdmin Pages
 const SysAdminLogin = lazy(() => import("./pages/sysadmin/Login"));
@@ -56,13 +60,21 @@ const App = () => (
             <Route path="/dashboard" element={<ProtectedRoute><Dashboard /></ProtectedRoute>} />
             <Route path="/products" element={<ProtectedRoute><Products /></ProtectedRoute>} />
             <Route path="/inventory" element={<ProtectedRoute><Inventory /></ProtectedRoute>} />
-            <Route path="/pos" element={<ProtectedRoute><POS /></ProtectedRoute>} />
+
+            {/* POS Layout Route */}
+            <Route element={<POSLayout />}>
+              <Route path="/pos" element={<ProtectedRoute><POS /></ProtectedRoute>} />
+            </Route>
+
             <Route path="/sales-history" element={<ProtectedRoute><SalesHistory /></ProtectedRoute>} />
             <Route path="/customers" element={<ProtectedRoute><Customers /></ProtectedRoute>} />
-            <Route path="/expenses" element={<ProtectedRoute><Expenses /></ProtectedRoute>} />
+            {/* <Route path="/expenses" element={<ProtectedRoute><Expenses /></ProtectedRoute>} /> */}
+            <Route path="/accounting" element={<ProtectedRoute><Accounting /></ProtectedRoute>} />
             <Route path="/staff" element={<ProtectedRoute><Staff /></ProtectedRoute>} />
+            <Route path="/quotations" element={<ProtectedRoute><Quotations /></ProtectedRoute>} />
             <Route path="/reports" element={<ProtectedRoute><Reports /></ProtectedRoute>} />
             <Route path="/settings" element={<ProtectedRoute><Settings /></ProtectedRoute>} />
+            <Route path="/unauthorized" element={<Unauthorized />} />
             <Route path="/install" element={<Install />} />
 
             {/* SysAdmin Routes */}

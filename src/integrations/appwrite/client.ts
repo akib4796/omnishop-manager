@@ -1,4 +1,4 @@
-import { Client, Account, Databases, Query, ID } from 'appwrite';
+import { Client, Account, Databases, Storage, Query, ID } from 'appwrite';
 
 const APPWRITE_ENDPOINT = import.meta.env.VITE_APPWRITE_ENDPOINT;
 const APPWRITE_PROJECT_ID = import.meta.env.VITE_APPWRITE_PROJECT_ID;
@@ -23,6 +23,7 @@ client.ping().then(() => {
 // Initialize services
 export const account = new Account(client);
 export const databases = new Databases(client);
+export const storage = new Storage(client);
 
 // Database ID
 export const DATABASE_ID = import.meta.env.VITE_APPWRITE_DATABASE_ID || 'omnishop_db';

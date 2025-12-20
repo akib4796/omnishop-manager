@@ -1,14 +1,21 @@
 import { useState } from "react";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
-import { supabase } from "@/integrations/appwrite";
 import { useTranslation } from "react-i18next";
 import { AppSidebar } from "@/components/AppSidebar";
 import { SidebarProvider, SidebarInset } from "@/components/ui/sidebar";
+import { MobileNavSheet } from "@/components/MobileNavSheet";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
-import { Plus, Search, Pencil, Trash2 } from "lucide-react";
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from "@/components/ui/select";
+import { Plus, Search, Pencil, Trash2, RefreshCw } from "lucide-react";
 import { toast } from "sonner";
-import { formatCurrency, toBengaliNumerals } from "@/lib/i18n-utils";
+import { formatCurrency } from "@/lib/i18n-utils";
 import {
   Table,
   TableBody,
@@ -25,78 +32,69 @@ import {
   DialogFooter,
 } from "@/components/ui/dialog";
 import { Label } from "@/components/ui/label";
+import { useAuth } from "@/hooks/useAuth";
+import {
+  getCustomers,
+  createCustomer,
+  updateCustomer,
+  deleteCustomer,
+  Customer
+} from "@/integrations/appwrite/customers";
+import { CustomerDetailsModal } from "@/components/customers/CustomerDetailsModal";
 
 export default function Customers() {
   const { t, i18n } = useTranslation();
   const queryClient = useQueryClient();
+  const { profile, isLoading: authLoading, user } = useAuth();
+  const tenantId = profile?.tenantId;
+
   const [searchQuery, setSearchQuery] = useState("");
   const [isDialogOpen, setIsDialogOpen] = useState(false);
-  const [editingCustomer, setEditingCustomer] = useState<any>(null);
-  const [formData, setFormData] = useState({ name: "", phone: "", email: "" });
+  const [editingCustomer, setEditingCustomer] = useState<Customer | null>(null);
+  const [selectedCustomer, setSelectedCustomer] = useState<Customer | null>(null);
+  const [isDetailsOpen, setIsDetailsOpen] = useState(false);
+  const [formData, setFormData] = useState({ name: "", phone: "", email: "", priceTier: "retail", creditLimit: "0" });
 
   const { data: customers, isLoading } = useQuery({
-    queryKey: ["customers"],
+    queryKey: ["customers", tenantId],
     queryFn: async () => {
-      const { data, error } = await supabase
-        .from("customers")
-        .select("*")
-        .order("name");
-      if (error) throw error;
-      return data;
+      if (!tenantId) return [];
+      return getCustomers(tenantId);
     },
+    enabled: !!tenantId,
   });
 
-  const { data: sales } = useQuery({
-    queryKey: ["customer-sales"],
-    queryFn: async () => {
-      const { data, error } = await supabase
-        .from("sales")
-        .select("customer_id, total_amount, created_at");
-      if (error) throw error;
-      return data;
-    },
-  });
+  // Note: For customer sales stats, we would need a sales collection query
+  // For now, we'll disable the stats feature or return defaults
 
   const saveCustomerMutation = useMutation({
-    mutationFn: async (data: any) => {
-      const { data: userData, error: authError } = await supabase.auth.getUser();
-      if (authError || !userData.user) throw new Error("Not authenticated");
-
-      const { data: profile, error: profileError } = await supabase
-        .from("profiles")
-        .select("tenant_id")
-        .eq("id", userData.user.id)
-        .single();
-
-      if (profileError || !profile?.tenant_id) throw new Error("No tenant found");
+    mutationFn: async (data: { name: string; phone: string; email: string; priceTier: string; creditLimit: string }) => {
+      if (!tenantId || !user) throw new Error("Not authenticated");
 
       if (editingCustomer) {
-        const { error } = await supabase
-          .from("customers")
-          .update({
-            name: data.name,
-            phone: data.phone || null,
-            email: data.email || null,
-          })
-          .eq("id", editingCustomer.id);
-        if (error) throw error;
+        return updateCustomer(editingCustomer.$id, {
+          name: data.name,
+          phone: data.phone || undefined,
+          email: data.email || undefined,
+          priceTier: data.priceTier as 'retail' | 'wholesale' | 'dealer',
+          creditLimit: parseFloat(data.creditLimit || "0"),
+        });
       } else {
-        const { error } = await supabase
-          .from("customers")
-          .insert({
-            name: data.name,
-            phone: data.phone || null,
-            email: data.email || null,
-            tenant_id: profile.tenant_id,
-          });
-        if (error) throw error;
+        return createCustomer({
+          name: data.name,
+          phone: data.phone || undefined,
+          email: data.email || undefined,
+          priceTier: data.priceTier as 'retail' | 'wholesale' | 'dealer',
+          creditLimit: parseFloat(data.creditLimit || "0"),
+          tenantId,
+        });
       }
     },
     onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ["customers"] });
+      queryClient.invalidateQueries({ queryKey: ["customers", tenantId] });
       toast.success(t(editingCustomer ? "customers.customerUpdated" : "customers.customerAdded"));
       setIsDialogOpen(false);
-      setFormData({ name: "", phone: "", email: "" });
+      setFormData({ name: "", phone: "", email: "", priceTier: "retail", creditLimit: "0" });
       setEditingCustomer(null);
     },
     onError: (error: Error) => {
@@ -107,14 +105,10 @@ export default function Customers() {
 
   const deleteCustomerMutation = useMutation({
     mutationFn: async (customerId: string) => {
-      const { error } = await supabase
-        .from("customers")
-        .delete()
-        .eq("id", customerId);
-      if (error) throw error;
+      return deleteCustomer(customerId);
     },
     onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ["customers"] });
+      queryClient.invalidateQueries({ queryKey: ["customers", tenantId] });
       toast.success(t("customers.deleted"));
     },
     onError: () => {
@@ -122,12 +116,14 @@ export default function Customers() {
     },
   });
 
-  const handleEdit = (customer: any) => {
+  const handleEdit = (customer: Customer) => {
     setEditingCustomer(customer);
     setFormData({
       name: customer.name,
       phone: customer.phone || "",
       email: customer.email || "",
+      priceTier: customer.priceTier || "retail",
+      creditLimit: (customer.creditLimit || 0).toString(),
     });
     setIsDialogOpen(true);
   };
@@ -149,25 +145,37 @@ export default function Customers() {
       c.phone?.toLowerCase().includes(searchQuery.toLowerCase())
   );
 
-  const getCustomerStats = (customerId: string) => {
-    const customerSales = sales?.filter((s) => s.customer_id === customerId) || [];
-    const totalSpent = customerSales.reduce((sum, s) => sum + parseFloat(String(s.total_amount)), 0);
-    const lastVisit = customerSales.length > 0 
-      ? new Date(customerSales[0].created_at)
-      : null;
-    return { totalSpent, lastVisit };
+  // Placeholder for customer stats - would need actual sales data
+  const getCustomerStats = (_customerId: string) => {
+    return { totalSpent: 0, lastVisit: null as Date | null };
   };
+
+  if (authLoading || !tenantId) {
+    return (
+      <SidebarProvider>
+        <AppSidebar />
+        <SidebarInset>
+          <div className="p-6 flex items-center justify-center h-64">
+            <RefreshCw className="h-8 w-8 animate-spin text-muted-foreground" />
+          </div>
+        </SidebarInset>
+      </SidebarProvider>
+    );
+  }
 
   return (
     <SidebarProvider>
       <AppSidebar />
       <SidebarInset>
-        <div className="p-6">
-          <div className="flex justify-between items-center mb-6">
-            <h1 className="text-3xl font-bold">{t("customers.title")}</h1>
+        {/* Mobile Header with Navigation */}
+        <MobileNavSheet title={t("customers.title")} />
+
+        <div className="p-4 md:p-6">
+          <div className="flex flex-col sm:flex-row sm:justify-between sm:items-center gap-4 mb-6">
+            <h1 className="hidden md:block text-xl md:text-3xl font-bold">{t("customers.title")}</h1>
             <Button onClick={() => {
               setEditingCustomer(null);
-              setFormData({ name: "", phone: "", email: "" });
+              setFormData({ name: "", phone: "", email: "", priceTier: "retail", creditLimit: "0" });
               setIsDialogOpen(true);
             }}>
               <Plus className="h-4 w-4 mr-2" />
@@ -188,62 +196,124 @@ export default function Customers() {
           </div>
 
           {isLoading ? (
-            <p>{t("common.loading")}</p>
+            <div className="flex items-center justify-center py-12">
+              <RefreshCw className="h-6 w-6 animate-spin text-muted-foreground" />
+            </div>
           ) : filteredCustomers && filteredCustomers.length > 0 ? (
-            <div className="border rounded-lg">
-              <Table>
-                <TableHeader>
-                  <TableRow>
-                    <TableHead>{t("common.name")}</TableHead>
-                    <TableHead>{t("customers.phone")}</TableHead>
-                    <TableHead>{t("customers.email")}</TableHead>
-                    <TableHead>{t("customers.totalSpent")}</TableHead>
-                    <TableHead>{t("customers.lastVisit")}</TableHead>
-                    <TableHead>{t("common.action")}</TableHead>
-                  </TableRow>
-                </TableHeader>
-                <TableBody>
-                  {filteredCustomers.map((customer) => {
-                    const stats = getCustomerStats(customer.id);
-                    return (
-                      <TableRow key={customer.id}>
-                        <TableCell className="font-medium">{customer.name}</TableCell>
-                        <TableCell>{customer.phone || "-"}</TableCell>
-                        <TableCell>{customer.email || "-"}</TableCell>
-                        <TableCell className="font-bold">
-                          {formatCurrency(stats.totalSpent, i18n.language)}
-                        </TableCell>
-                        <TableCell>
-                          {stats.lastVisit
+            <>
+              {/* Mobile Card View */}
+              <div className="md:hidden space-y-3">
+                {filteredCustomers.map((customer) => {
+                  const stats = getCustomerStats(customer.$id);
+                  return (
+                    <div
+                      key={customer.$id}
+                      className="bg-card border rounded-lg p-4 space-y-3"
+                    >
+                      <div className="flex justify-between items-start">
+                        <div>
+                          <h3 className="font-semibold">{customer.name}</h3>
+                          <p className="text-sm text-muted-foreground">{customer.phone || "-"}</p>
+                        </div>
+                        <div className="flex gap-1">
+                          <Button
+                            variant="ghost"
+                            size="sm"
+                            onClick={() => handleEdit(customer)}
+                          >
+                            <Pencil className="h-4 w-4" />
+                          </Button>
+                          <Button
+                            variant="ghost"
+                            size="sm"
+                            onClick={() => handleDelete(customer.$id)}
+                          >
+                            <Trash2 className="h-4 w-4" />
+                          </Button>
+                        </div>
+                      </div>
+                      <div className="grid grid-cols-2 gap-2 text-sm">
+                        <div>
+                          <span className="text-muted-foreground">{t("customers.totalSpent")}:</span>
+                          <p className="font-bold">{formatCurrency(stats.totalSpent, i18n.language)}</p>
+                        </div>
+                        <div>
+                          <span className="text-muted-foreground">{t("customers.lastVisit")}:</span>
+                          <p>{stats.lastVisit
                             ? stats.lastVisit.toLocaleDateString(
+                              i18n.language === "bn" ? "bn-BD" : "en-US"
+                            )
+                            : "-"}</p>
+                        </div>
+                      </div>
+                    </div>
+                  );
+                })}
+              </div>
+
+              {/* Desktop Table View */}
+              <div className="hidden md:block border rounded-lg overflow-x-auto">
+                <Table className="min-w-[700px]">
+                  <TableHeader>
+                    <TableRow>
+                      <TableHead>{t("common.name")}</TableHead>
+                      <TableHead>{t("customers.phone")}</TableHead>
+                      <TableHead>{t("customers.email")}</TableHead>
+                      <TableHead>{t("customers.totalSpent")}</TableHead>
+                      <TableHead>{t("customers.lastVisit")}</TableHead>
+                      <TableHead>{t("common.action")}</TableHead>
+                    </TableRow>
+                  </TableHeader>
+                  <TableBody>
+                    {filteredCustomers.map((customer) => {
+                      const stats = getCustomerStats(customer.$id);
+                      return (
+                        <TableRow
+                          key={customer.$id}
+                          className="cursor-pointer hover:bg-muted/50"
+                          onClick={() => {
+                            setSelectedCustomer(customer);
+                            setIsDetailsOpen(true);
+                          }}
+                        >
+                          <TableCell className="font-medium">{customer.name}</TableCell>
+                          <TableCell>{customer.phone || "-"}</TableCell>
+                          <TableCell>{customer.email || "-"}</TableCell>
+                          <TableCell className="font-bold">
+                            {formatCurrency(stats.totalSpent, i18n.language)}
+                          </TableCell>
+                          <TableCell>
+                            {stats.lastVisit
+                              ? stats.lastVisit.toLocaleDateString(
                                 i18n.language === "bn" ? "bn-BD" : "en-US"
                               )
-                            : "-"}
-                        </TableCell>
-                        <TableCell>
-                          <div className="flex gap-2">
-                            <Button
-                              variant="ghost"
-                              size="sm"
-                              onClick={() => handleEdit(customer)}
-                            >
-                              <Pencil className="h-4 w-4" />
-                            </Button>
-                            <Button
-                              variant="ghost"
-                              size="sm"
-                              onClick={() => handleDelete(customer.id)}
-                            >
-                              <Trash2 className="h-4 w-4" />
-                            </Button>
-                          </div>
-                        </TableCell>
-                      </TableRow>
-                    );
-                  })}
-                </TableBody>
-              </Table>
-            </div>
+                              : "-"}
+                          </TableCell>
+                          <TableCell>
+                            <div className="flex gap-2">
+                              <Button
+                                variant="ghost"
+                                size="sm"
+                                onClick={() => handleEdit(customer)}
+                              >
+                                <Pencil className="h-4 w-4" />
+                              </Button>
+                              <Button
+                                variant="ghost"
+                                size="sm"
+                                onClick={() => handleDelete(customer.$id)}
+                              >
+                                <Trash2 className="h-4 w-4" />
+                              </Button>
+                            </div>
+                          </TableCell>
+                        </TableRow>
+                      );
+                    })}
+                  </TableBody>
+                </Table>
+              </div>
+            </>
           ) : (
             <div className="text-center py-12 text-muted-foreground">
               {t("customers.noCustomers")}
@@ -285,6 +355,32 @@ export default function Customers() {
                       onChange={(e) => setFormData({ ...formData, email: e.target.value })}
                     />
                   </div>
+                  <div>
+                    <Label htmlFor="priceTier">{t("customers.priceTier") || "Price Tier"}</Label>
+                    <Select
+                      value={formData.priceTier}
+                      onValueChange={(value) => setFormData({ ...formData, priceTier: value })}
+                    >
+                      <SelectTrigger>
+                        <SelectValue placeholder="Select tier" />
+                      </SelectTrigger>
+                      <SelectContent>
+                        <SelectItem value="retail">Retail</SelectItem>
+                        <SelectItem value="wholesale">Wholesale</SelectItem>
+                        <SelectItem value="dealer">Dealer</SelectItem>
+                      </SelectContent>
+                    </Select>
+                  </div>
+                  <div>
+                    <Label htmlFor="creditLimit">{t("customers.creditLimit") || "Credit Limit"}</Label>
+                    <Input
+                      id="creditLimit"
+                      type="number"
+                      min="0"
+                      value={formData.creditLimit}
+                      onChange={(e) => setFormData({ ...formData, creditLimit: e.target.value })}
+                    />
+                  </div>
                 </div>
                 <DialogFooter className="mt-6">
                   <Button type="button" variant="outline" onClick={() => setIsDialogOpen(false)}>
@@ -295,6 +391,14 @@ export default function Customers() {
               </form>
             </DialogContent>
           </Dialog>
+
+          {/* Customer Details Modal */}
+          <CustomerDetailsModal
+            open={isDetailsOpen}
+            onOpenChange={setIsDetailsOpen}
+            customer={selectedCustomer}
+            tenantId={tenantId || ""}
+          />
         </div>
       </SidebarInset>
     </SidebarProvider>

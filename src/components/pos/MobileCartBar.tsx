@@ -1,7 +1,8 @@
 import { useTranslation } from "react-i18next";
-import { ShoppingCart } from "lucide-react";
+import { ShoppingCart, ChevronRight } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { toBengaliNumerals } from "@/lib/i18n-utils";
+import { cn } from "@/lib/utils";
 
 interface MobileCartBarProps {
   itemCount: number;
@@ -24,24 +25,36 @@ export function MobileCartBar({ itemCount, total, onOpenCart }: MobileCartBarPro
   if (itemCount === 0) return null;
 
   return (
-    <div className="fixed bottom-16 left-0 right-0 z-40 p-3 md:hidden safe-area-bottom">
-      <Button 
+    <div className={cn(
+      "fixed bottom-0 left-0 right-0 z-40 md:hidden",
+      "px-4 pb-6 pt-3",
+      "bg-gradient-to-t from-slate-900 via-slate-900/95 to-transparent"
+    )}>
+      <Button
         onClick={onOpenCart}
-        className="w-full h-14 text-base font-semibold rounded-xl shadow-lg bg-primary hover:bg-primary/90 flex items-center justify-between px-4"
+        className={cn(
+          "w-full h-16 text-base font-bold rounded-2xl",
+          "bg-gradient-to-r from-indigo-500 to-purple-600",
+          "hover:from-indigo-600 hover:to-purple-700",
+          "shadow-xl shadow-indigo-500/30",
+          "flex items-center justify-between px-5",
+          "transition-all duration-200 active:scale-[0.98]"
+        )}
       >
         <div className="flex items-center gap-3">
           <div className="relative">
-            <ShoppingCart className="h-5 w-5" />
-            <span className="absolute -top-2 -right-2 bg-primary-foreground text-primary text-xs font-bold rounded-full h-5 w-5 flex items-center justify-center">
+            <ShoppingCart className="h-6 w-6" />
+            <span className="absolute -top-2 -right-2 bg-white text-indigo-600 text-xs font-bold rounded-full h-5 w-5 flex items-center justify-center shadow">
               {formatCount(itemCount)}
             </span>
           </div>
-          <span>{formatCount(itemCount)}{i18n.language === "bn" ? "টি" : " items"}</span>
+          <span className="text-white/90">
+            {formatCount(itemCount)}{i18n.language === "bn" ? "টি আইটেম" : " items"}
+          </span>
         </div>
         <div className="flex items-center gap-2">
-          <span className="text-lg font-bold">{formatPrice(total)}</span>
-          <span>→</span>
-          <span>{t("pos.payment")}</span>
+          <span className="text-xl font-bold">{formatPrice(total)}</span>
+          <ChevronRight className="h-5 w-5" />
         </div>
       </Button>
     </div>

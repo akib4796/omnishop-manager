@@ -13,6 +13,7 @@ export interface Product {
     categoryId?: string;
     purchasePrice?: number;
     sellingPrice?: number;
+    tradePrice?: number;
     currentStock: number;
     lowStockThreshold?: number;
     unit?: string;
@@ -33,6 +34,7 @@ export interface CreateProductData {
     categoryId?: string;
     purchasePrice?: number;
     sellingPrice?: number;
+    tradePrice?: number;
     currentStock: number;
     lowStockThreshold?: number;
     unit?: string;
@@ -212,6 +214,7 @@ export const createProduct = async (data: CreateProductData): Promise<Product> =
                 categoryId: data.categoryId || null,
                 purchasePrice: data.purchasePrice || 0,
                 sellingPrice: data.sellingPrice || 0,
+                tradePrice: data.tradePrice || 0,
                 currentStock: data.currentStock,
                 lowStockThreshold: data.lowStockThreshold || 10,
                 unit: data.unit || 'pcs',
@@ -244,6 +247,7 @@ export const updateProduct = async (
         if (data.categoryId !== undefined) updateData.categoryId = data.categoryId;
         if (data.purchasePrice !== undefined) updateData.purchasePrice = data.purchasePrice;
         if (data.sellingPrice !== undefined) updateData.sellingPrice = data.sellingPrice;
+        if (data.tradePrice !== undefined) updateData.tradePrice = data.tradePrice;
         if (data.currentStock !== undefined) updateData.currentStock = data.currentStock;
         if (data.lowStockThreshold !== undefined) updateData.lowStockThreshold = data.lowStockThreshold;
         if (data.unit !== undefined) updateData.unit = data.unit;
@@ -366,5 +370,125 @@ export const getProductCount = async (tenantId: string): Promise<number> => {
     } catch (error: any) {
         console.error('Error fetching product count:', error);
         return 0;
+    }
+};
+
+/**
+ * Get products with pagination for reports
+ */
+export interface PaginatedResult<T> {
+    data: T[];
+    total: number;
+    hasMore: boolean;
+}
+
+export const getProductsPaginated = async (
+    tenantId: string,
+    limit: number = 25,
+    offset: number = 0
+): Promise<PaginatedResult<Product>> => {
+    try {
+        const response = await databases.listDocuments(
+            DATABASE_ID,
+            COLLECTION_ID,
+            [
+                Query.equal('tenantId', tenantId),
+                Query.orderAsc('name'),
+                Query.limit(limit),
+                Query.offset(offset)
+            ]
+        );
+
+        return {
+            data: response.documents as unknown as Product[],
+            total: response.total,
+            hasMore: offset + response.documents.length < response.total
+        };
+    } catch (error: any) {
+        console.error('Error fetching paginated products:', error);
+        throw error;
+    }
+};
+
+/**
+ * Get low stock products with pagination for reports
+ * Note: Appwrite doesn't support <= comparison directly, so we fetch in batches
+ * and filter client-side, but limit results for performance
+ */
+export const getLowStockProductsPaginated = async (
+    tenantId: string,
+    limit: number = 25,
+    offset: number = 0
+): Promise<PaginatedResult<Product>> => {
+    try {
+        // Fetch products sorted by stock ascending to get low stock first
+        const response = await databases.listDocuments(
+            DATABASE_ID,
+            COLLECTION_ID,
+            [
+                Query.equal('tenantId', tenantId),
+                Query.orderAsc('currentStock'),
+                Query.limit(500) // Fetch a reasonable batch for filtering
+            ]
+        );
+
+        const allProducts = response.documents as unknown as Product[];
+
+        // Filter for low stock items (currentStock <= lowStockThreshold)
+        const lowStockItems = allProducts.filter(p =>
+            (p.currentStock || 0) <= (p.lowStockThreshold || 10)
+        );
+
+        // Apply pagination to filtered results
+        const paginatedData = lowStockItems.slice(offset, offset + limit);
+
+        return {
+            data: paginatedData,
+            total: lowStockItems.length,
+            hasMore: offset + limit < lowStockItems.length
+        };
+    } catch (error: any) {
+        console.error('Error fetching low stock products:', error);
+        throw error;
+    }
+};
+
+/**
+ * Get inventory summary stats (for KPI cards)
+ */
+export const getInventorySummary = async (tenantId: string): Promise<{
+    totalProducts: number;
+    totalValue: number;
+    lowStockCount: number;
+}> => {
+    try {
+        // Get all products for summary (this is okay for stats)
+        const response = await databases.listDocuments(
+            DATABASE_ID,
+            COLLECTION_ID,
+            [
+                Query.equal('tenantId', tenantId),
+                Query.limit(1000) // Higher limit for summary
+            ]
+        );
+
+        const products = response.documents as unknown as Product[];
+
+        const totalValue = products.reduce((sum, p) =>
+            sum + ((p.currentStock || 0) * (p.sellingPrice || 0)), 0
+        );
+
+        const lowStockCount = products.filter(p =>
+            (p.currentStock || 0) <= (p.lowStockThreshold || 10)
+        ).length;
+
+        return {
+            totalProducts: response.total,
+            totalValue,
+            lowStockCount
+        };
+    } catch (error: any) {
+        console.error('Error fetching inventory summary:', error);
+        return { totalProducts: 0, totalValue: 0, lowStockCount: 0 };
     }
 };

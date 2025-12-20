@@ -9,6 +9,11 @@ interface UserProfile {
     fullName?: string;
     email?: string;
     phone?: string;
+    role?: {
+        $id: string;
+        name: string;
+        permissions: string[];
+    };
 }
 
 interface AuthState {
@@ -16,6 +21,9 @@ interface AuthState {
     profile: UserProfile | null;
     isLoading: boolean;
     isAuthenticated: boolean;
+    hasPermission: (permission: string) => boolean;
+    labels: string[];
+    isStaff: boolean;
 }
 
 const DATABASE_ID = import.meta.env.VITE_APPWRITE_DATABASE_ID || 'omnishop_db';
@@ -60,6 +68,7 @@ export function useAuth(): AuthState {
                             fullName: doc.fullName,
                             email: doc.email,
                             phone: doc.phone,
+                            role: doc.role // Assuming 'role' is a relationship that is expanded
                         });
                     } else {
                         console.log('[useAuth] No profile found for user');
@@ -88,10 +97,24 @@ export function useAuth(): AuthState {
         };
     }, []);
 
+    // Helper function to check if user has a specific permission
+    const hasPermission = (permission: string): boolean => {
+        // If no role is set (legacy/owner user), grant all permissions
+        if (!profile?.role) return true;
+        return profile.role.permissions?.includes(permission) || false;
+    };
+
+    // Get user labels from Appwrite user object
+    const labels = user?.labels || [];
+    const isStaff = labels.includes('staff');
+
     return {
         user,
         profile,
         isLoading,
         isAuthenticated: !!user,
+        hasPermission,
+        labels,
+        isStaff,
     };
 }

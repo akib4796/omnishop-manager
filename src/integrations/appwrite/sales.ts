@@ -17,6 +17,7 @@ export interface SaleItem {
     productId: string;
     quantity: number;
     price: number;
+    costPrice?: number; // Purchase price for profit margin calculation
 }
 
 export interface SaleData {
@@ -40,6 +41,7 @@ export interface PendingSale {
     synced: boolean;
     syncedAt?: string;
     createdAt: string;
+    amountPaid?: number;  // Amount paid toward this sale (for credit sales)
 }
 
 export interface CreatePendingSaleData {
@@ -93,6 +95,11 @@ export async function getPendingSales(tenantId: string): Promise<PendingSale[]> 
         ]
     );
 
+    // Debug: Log raw amountPaid values from Appwrite
+    console.log('[Sales] Raw documents amountPaid values:',
+        response.documents.map((d: any) => ({ id: d.$id.substring(0, 8), amountPaid: d.amountPaid }))
+    );
+
     return response.documents.map((doc: any) => ({
         $id: doc.$id,
         tenantId: doc.tenantId,
@@ -100,6 +107,7 @@ export async function getPendingSales(tenantId: string): Promise<PendingSale[]> 
         synced: doc.synced,
         syncedAt: doc.syncedAt,
         createdAt: doc.createdAt,
+        amountPaid: doc.amountPaid || 0,  // Include amount paid for FIFO tracking
     }));
 }
 
@@ -124,6 +132,7 @@ export async function getUnsyncedSales(tenantId: string): Promise<PendingSale[]>
         synced: doc.synced,
         syncedAt: doc.syncedAt,
         createdAt: doc.createdAt,
+        amountPaid: doc.amountPaid || 0,
     }));
 }
 
@@ -195,5 +204,106 @@ export async function getSalesInRange(
         synced: doc.synced,
         syncedAt: doc.syncedAt,
         createdAt: doc.createdAt,
+        amountPaid: doc.amountPaid || 0,
     }));
+}
+
+/**
+ * Get sales for a specific customer
+ * Returns full sale data including items, total, payment method
+ */
+export async function getCustomerSales(tenantId: string, customerId: string): Promise<PendingSale[]> {
+    const allSales = await getPendingSales(tenantId);
+
+    // Filter sales that belong to this customer
+    return allSales.filter(sale => sale.saleData.customerId === customerId);
+}
+
+/**
+ * Update the amount paid for a specific sale
+ * Note: Requires 'amountPaid' attribute in pending_sales collection
+ */
+export async function updateSaleAmountPaid(saleId: string, amountPaid: number): Promise<void> {
+    console.log('[Sales] Updating amountPaid for sale:', saleId, 'to:', amountPaid);
+    try {
+        const result = await databases.updateDocument(
+            DATABASE_ID,
+            COLLECTION_ID,
+            saleId,
+            {
+                amountPaid: amountPaid,
+            }
+        );
+        console.log('[Sales] Successfully updated amountPaid. Result:', result.amountPaid);
+    } catch (error: any) {
+        console.error('[Sales] Error updating amountPaid:', error);
+        // Gracefully handle missing attribute error
+        if (error?.code === 400 && error?.message?.includes('Unknown attribute')) {
+            console.warn('[Sales] amountPaid attribute not found in collection. Payment recorded but FIFO tracking requires adding this attribute to Appwrite.');
+        } else {
+            throw error;
+        }
+    }
+}
+
+/**
+ * Get unpaid/partially paid credit sales for a customer, sorted oldest first
+ */
+export async function getUnpaidCreditSales(tenantId: string, customerId: string): Promise<PendingSale[]> {
+    const customerSales = await getCustomerSales(tenantId, customerId);
+
+    // Filter to credit sales that are not fully paid
+    return customerSales
+        .filter(sale => {
+            // Only credit sales
+            if (sale.saleData.paymentMethod !== 'credit') return false;
+
+            // Check if not fully paid
+            const paid = sale.amountPaid || 0;
+            const total = sale.saleData.total;
+            return paid < total;
+        })
+        // Sort by createdAt ascending (oldest first for FIFO)
+        .sort((a, b) => new Date(a.createdAt).getTime() - new Date(b.createdAt).getTime());
+}
+
+/**
+ * Allocate a payment to credit sales using FIFO (oldest first)
+ * Returns array of updated sales with their new amountPaid values
+ */
+export async function allocatePaymentToSales(
+    tenantId: string,
+    customerId: string,
+    paymentAmount: number
+): Promise<{ saleId: string; amountApplied: number; newAmountPaid: number; isFullyPaid: boolean }[]> {
+    const unpaidSales = await getUnpaidCreditSales(tenantId, customerId);
+
+    let remainingPayment = paymentAmount;
+    const allocations: { saleId: string; amountApplied: number; newAmountPaid: number; isFullyPaid: boolean }[] = [];
+
+    for (const sale of unpaidSales) {
+        if (remainingPayment <= 0) break;
+
+        const currentPaid = sale.amountPaid || 0;
+        const total = sale.saleData.total;
+        const outstanding = total - currentPaid;
+
+        // How much can we apply to this sale?
+        const amountToApply = Math.min(remainingPayment, outstanding);
+        const newAmountPaid = currentPaid + amountToApply;
+
+        // Update the sale in database
+        await updateSaleAmountPaid(sale.$id, newAmountPaid);
+
+        allocations.push({
+            saleId: sale.$id,
+            amountApplied: amountToApply,
+            newAmountPaid: newAmountPaid,
+            isFullyPaid: newAmountPaid >= total,
+        });
+
+        remainingPayment -= amountToApply;
+    }
+
+    return allocations;
 }

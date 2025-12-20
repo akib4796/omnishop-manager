@@ -1,6 +1,5 @@
 import { useState } from "react";
 import { useMutation, useQueryClient } from "@tanstack/react-query";
-import { supabase } from "@/integrations/appwrite";
 import { useTranslation } from "react-i18next";
 import { Plus } from "lucide-react";
 import { toast } from "sonner";
@@ -14,10 +13,15 @@ import {
 } from "@/components/ui/dialog";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
+import { useAuth } from "@/hooks/useAuth";
+import { createSupplier } from "@/integrations/appwrite/inventory";
 
 export function SupplierQuickAdd() {
   const { t } = useTranslation();
   const queryClient = useQueryClient();
+  const { profile } = useAuth();
+  const tenantId = profile?.tenantId;
+
   const [isOpen, setIsOpen] = useState(false);
   const [formData, setFormData] = useState({
     name: "",
@@ -27,28 +31,17 @@ export function SupplierQuickAdd() {
 
   const addSupplierMutation = useMutation({
     mutationFn: async (data: { name: string; phone: string; email: string }) => {
-      const { data: userData, error: authError } = await supabase.auth.getUser();
-      if (authError || !userData.user) throw new Error("Not authenticated");
+      if (!tenantId) throw new Error("Not authenticated");
 
-      const { data: profile, error: profileError } = await supabase
-        .from("profiles")
-        .select("tenant_id")
-        .eq("id", userData.user.id)
-        .single();
-
-      if (profileError || !profile?.tenant_id) throw new Error("No tenant found");
-
-      const { error } = await supabase.from("suppliers").insert({
+      return createSupplier({
         name: data.name,
-        phone: data.phone || null,
-        email: data.email || null,
-        tenant_id: profile.tenant_id,
+        phone: data.phone || undefined,
+        email: data.email || undefined,
+        tenantId,
       });
-      
-      if (error) throw error;
     },
     onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ["suppliers"] });
+      queryClient.invalidateQueries({ queryKey: ["suppliers", tenantId] });
       toast.success(t("inventory.supplierAdded"));
       setIsOpen(false);
       setFormData({ name: "", phone: "", email: "" });

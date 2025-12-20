@@ -1,4 +1,5 @@
 import { useTranslation } from "react-i18next";
+import { useAuth } from "@/hooks/useAuth";
 import { NavLink } from "@/components/NavLink";
 import { useLocation, useNavigate } from "react-router-dom";
 import { signOut } from "@/integrations/appwrite";
@@ -16,6 +17,8 @@ import {
   UserCog,
   Settings,
   LogOut,
+  Landmark,
+  FileText,
 } from "lucide-react";
 import {
   Sidebar,
@@ -36,23 +39,39 @@ export function AppSidebar() {
   const { state } = useSidebar();
   const location = useLocation();
   const navigate = useNavigate();
+  const { profile, isStaff } = useAuth();
+
   const collapsed = state === "collapsed";
   const currentPath = location.pathname;
+  const permissions = profile?.role?.permissions || [];
 
   const menuItems = [
-    { title: t("menu.dashboard"), url: "/dashboard", icon: LayoutDashboard },
-    { title: t("menu.pos"), url: "/pos", icon: ShoppingCart },
-    { title: t("menu.products"), url: "/products", icon: Package },
-    { title: t("menu.purchases"), url: "/inventory", icon: ShoppingBag },
-    { title: t("menu.salesHistory"), url: "/sales-history", icon: History },
-    { title: t("menu.reports"), url: "/reports", icon: BarChart3 },
-    { title: t("menu.customers"), url: "/customers", icon: Users },
-    { title: t("menu.expenses"), url: "/expenses", icon: Receipt },
-    { title: t("menu.staff"), url: "/staff", icon: UserCog },
-    { title: t("menu.settings"), url: "/settings", icon: Settings },
+    { title: t("menu.dashboard"), url: "/dashboard", icon: LayoutDashboard, permission: "view_dashboard", staffAllowed: false },
+    { title: t("menu.pos"), url: "/pos", icon: ShoppingCart, permission: "access_pos", staffAllowed: true },
+    { title: t("menu.products"), url: "/products", icon: Package, permission: "manage_products", staffAllowed: true },
+    { title: t("menu.purchases"), url: "/inventory", icon: ShoppingBag, permission: "manage_inventory", staffAllowed: true },
+    { title: t("menu.salesHistory"), url: "/sales-history", icon: History, permission: "view_sales", staffAllowed: false },
+    { title: t("menu.reports"), url: "/reports", icon: BarChart3, permission: "view_reports", staffAllowed: false },
+    { title: t("menu.customers"), url: "/customers", icon: Users, permission: "manage_customers", staffAllowed: true },
+    { title: t("menu.quotations", "Quotations"), url: "/quotations", icon: FileText, permission: "access_pos", staffAllowed: true },
+    { title: "Accounting", url: "/accounting", icon: Landmark, permission: "manage_expenses", staffAllowed: false },
+    { title: t("menu.staff"), url: "/staff", icon: UserCog, permission: "manage_staff", staffAllowed: false },
+    { title: t("menu.settings"), url: "/settings", icon: Settings, permission: "manage_settings", staffAllowed: false },
   ];
 
   const isActive = (path: string) => currentPath === path;
+
+  // Filter items based on permissions and staff label
+  const filteredItems = menuItems.filter(item => {
+    // If user is staff, only show staff-allowed items
+    if (isStaff) {
+      return item.staffAllowed;
+    }
+    // Otherwise, check role permissions
+    if (!item.permission) return true; // Public items
+    if (!profile?.role) return true; // If no role, show all (legacy/owner)
+    return permissions.includes(item.permission);
+  });
 
   const handleLogout = async () => {
     const { error } = await signOut();
@@ -72,7 +91,7 @@ export function AppSidebar() {
           </SidebarGroupLabel>
           <SidebarGroupContent>
             <SidebarMenu>
-              {menuItems.map((item) => (
+              {filteredItems.map((item) => (
                 <SidebarMenuItem key={item.title}>
                   <SidebarMenuButton asChild isActive={isActive(item.url)}>
                     <NavLink to={item.url} end>

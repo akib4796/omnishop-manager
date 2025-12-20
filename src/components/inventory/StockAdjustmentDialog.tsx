@@ -2,7 +2,6 @@ import { useForm } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
 import * as z from "zod";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
-import { supabase } from "@/integrations/appwrite";
 import { useTranslation } from "react-i18next";
 import { toast } from "sonner";
 import {
@@ -29,10 +28,13 @@ import {
   SelectValue,
 } from "@/components/ui/select";
 import { Textarea } from "@/components/ui/textarea";
+import { useAuth } from "@/hooks/useAuth";
+import { getProducts, updateProductStock } from "@/integrations/appwrite/products";
+import { createStockAdjustment } from "@/integrations/appwrite/inventory";
 
 const adjustmentSchema = z.object({
-  product_id: z.string().min(1, "Product is required"),
-  qty_change: z.string().min(1, "Quantity change is required"),
+  productId: z.string().min(1, "Product is required"),
+  qtyChange: z.string().min(1, "Quantity change is required"),
   reason: z.string().min(1, "Reason is required"),
 });
 
@@ -49,73 +51,52 @@ export function StockAdjustmentDialog({
 }: StockAdjustmentDialogProps) {
   const { t } = useTranslation();
   const queryClient = useQueryClient();
+  const { profile, user } = useAuth();
+  const tenantId = profile?.tenantId;
 
   const { data: products } = useQuery({
-    queryKey: ["products"],
+    queryKey: ["products", tenantId],
     queryFn: async () => {
-      const { data, error } = await supabase
-        .from("products")
-        .select("id, name, current_stock, unit")
-        .order("name");
-      if (error) throw error;
-      return data;
+      if (!tenantId) return [];
+      return getProducts(tenantId);
     },
+    enabled: !!tenantId,
   });
 
   const form = useForm<AdjustmentFormData>({
     resolver: zodResolver(adjustmentSchema),
     defaultValues: {
-      product_id: "",
-      qty_change: "0",
+      productId: "",
+      qtyChange: "0",
       reason: "",
     },
   });
 
   const saveMutation = useMutation({
     mutationFn: async (data: AdjustmentFormData) => {
-      const { data: userData } = await supabase.auth.getUser();
-      const { data: profile } = await supabase
-        .from("profiles")
-        .select("tenant_id")
-        .eq("id", userData.user?.id)
-        .single();
+      if (!tenantId || !user) throw new Error("Not authenticated");
 
-      const qtyChange = parseInt(data.qty_change);
+      const qtyChange = parseInt(data.qtyChange);
 
       // Create adjustment record
-      const { error: adjustmentError } = await supabase
-        .from("stock_adjustments")
-        .insert({
-          tenant_id: profile?.tenant_id,
-          product_id: data.product_id,
-          qty_change: qtyChange,
-          reason: data.reason,
-          adjusted_by: userData.user?.id,
-        });
-
-      if (adjustmentError) throw adjustmentError;
+      await createStockAdjustment({
+        productId: data.productId,
+        adjustmentType: qtyChange >= 0 ? 'in' : 'out',
+        quantity: Math.abs(qtyChange),
+        reason: data.reason,
+        tenantId,
+        createdBy: user.$id,
+      });
 
       // Update product stock
-      const { data: product } = await supabase
-        .from("products")
-        .select("current_stock")
-        .eq("id", data.product_id)
-        .single();
-
+      const product = products?.find(p => p.$id === data.productId);
       if (product) {
-        const { error: updateError } = await supabase
-          .from("products")
-          .update({
-            current_stock: product.current_stock + qtyChange,
-          })
-          .eq("id", data.product_id);
-
-        if (updateError) throw updateError;
+        await updateProductStock(data.productId, product.currentStock + qtyChange);
       }
     },
     onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ["stock-adjustments"] });
-      queryClient.invalidateQueries({ queryKey: ["products"] });
+      queryClient.invalidateQueries({ queryKey: ["stock-adjustments", tenantId] });
+      queryClient.invalidateQueries({ queryKey: ["products", tenantId] });
       toast.success(t("inventory.adjustmentCreated"));
       onOpenChange(false);
       form.reset();
@@ -139,7 +120,7 @@ export function StockAdjustmentDialog({
           <form onSubmit={form.handleSubmit(onSubmit)} className="space-y-4">
             <FormField
               control={form.control}
-              name="product_id"
+              name="productId"
               render={({ field }) => (
                 <FormItem>
                   <FormLabel>{t("inventory.product")}</FormLabel>
@@ -151,8 +132,8 @@ export function StockAdjustmentDialog({
                     </FormControl>
                     <SelectContent>
                       {products?.map((product) => (
-                        <SelectItem key={product.id} value={product.id}>
-                          {product.name} (Current: {product.current_stock}{" "}
+                        <SelectItem key={product.$id} value={product.$id}>
+                          {product.name} (Current: {product.currentStock}{" "}
                           {product.unit})
                         </SelectItem>
                       ))}
@@ -165,7 +146,7 @@ export function StockAdjustmentDialog({
 
             <FormField
               control={form.control}
-              name="qty_change"
+              name="qtyChange"
               render={({ field }) => (
                 <FormItem>
                   <FormLabel>{t("inventory.qtyChange")}</FormLabel>

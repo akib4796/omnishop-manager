@@ -13,6 +13,13 @@ export * from './products';
 export * from './sales';
 export * from './customers';
 
-// For backwards compatibility with Supabase patterns (note: this won't work for database queries)
-export { account as supabase } from './client';
+// Export dashboard and expenses modules
+export * from './dashboard';
+export * from './expenses';
+export * from './salesHistory';
+
+// Export inventory and staff modules
+export * from './inventory';
+export * from './staff';
+
 

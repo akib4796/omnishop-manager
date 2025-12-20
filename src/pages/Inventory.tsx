@@ -2,6 +2,7 @@ import { useState } from "react";
 import { useTranslation } from "react-i18next";
 import { AppSidebar } from "@/components/AppSidebar";
 import { SidebarProvider, SidebarInset } from "@/components/ui/sidebar";
+import { MobileNavSheet } from "@/components/MobileNavSheet";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { PurchaseOrders } from "@/components/inventory/PurchaseOrders";
 import { StockAdjustments } from "@/components/inventory/StockAdjustments";
@@ -13,8 +14,11 @@ export default function Inventory() {
     <SidebarProvider>
       <AppSidebar />
       <SidebarInset>
-        <div className="p-6">
-          <h1 className="text-3xl font-bold mb-6">{t("inventory.title")}</h1>
+        {/* Mobile Header with Navigation */}
+        <MobileNavSheet title={t("inventory.title")} />
+
+        <div className="p-4 md:p-6">
+          <h1 className="hidden md:block text-xl md:text-3xl font-bold mb-6">{t("inventory.title")}</h1>
 
           <Tabs defaultValue="purchase-orders" className="w-full">
             <TabsList className="grid w-full max-w-md grid-cols-2">

@@ -1,74 +1,78 @@
 import { useState } from "react";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
-import { supabase } from "@/integrations/appwrite";
 import { useTranslation } from "react-i18next";
 import { Button } from "@/components/ui/button";
-import { Plus } from "lucide-react";
+import { Plus, RefreshCw } from "lucide-react";
 import { toast } from "sonner";
 import { PurchaseOrderDialog } from "./PurchaseOrderDialog";
 import { PurchaseOrdersTable } from "./PurchaseOrdersTable";
+import { SupplierPaymentModal } from "./SupplierPaymentModal";
 import { SupplierQuickAdd } from "./SupplierQuickAdd";
+import { useAuth } from "@/hooks/useAuth";
+import {
+  getPurchaseOrders,
+  getSuppliers,
+  updatePurchaseOrderStatus,
+  PurchaseOrder
+} from "@/integrations/appwrite/inventory";
+import { updateProductStock, getProducts } from "@/integrations/appwrite/products";
 
 export function PurchaseOrders() {
-  const { t } = useTranslation();
+  const { t, i18n } = useTranslation();
   const queryClient = useQueryClient();
+  const { profile } = useAuth();
+  const tenantId = profile?.tenantId;
   const [isDialogOpen, setIsDialogOpen] = useState(false);
-  const [editingOrder, setEditingOrder] = useState<any>(null);
+  const [editingOrder, setEditingOrder] = useState<PurchaseOrder | null>(null);
+  const [paymentOrder, setPaymentOrder] = useState<PurchaseOrder | null>(null);
 
   const { data: purchaseOrders, isLoading } = useQuery({
-    queryKey: ["purchase-orders"],
+    queryKey: ["purchase-orders", tenantId],
     queryFn: async () => {
-      const { data, error } = await supabase
-        .from("purchase_orders")
-        .select("*, suppliers(name), purchase_order_items(*, products(name))")
-        .order("created_at", { ascending: false });
-      if (error) throw error;
-      return data;
+      if (!tenantId) return [];
+      return getPurchaseOrders(tenantId);
     },
+    enabled: !!tenantId,
+  });
+
+  const { data: suppliers } = useQuery({
+    queryKey: ["suppliers", tenantId],
+    queryFn: async () => {
+      if (!tenantId) return [];
+      return getSuppliers(tenantId);
+    },
+    enabled: !!tenantId,
+  });
+
+  const { data: products } = useQuery({
+    queryKey: ["products", tenantId],
+    queryFn: async () => {
+      if (!tenantId) return [];
+      return getProducts(tenantId);
+    },
+    enabled: !!tenantId,
   });
 
   const markAsReceivedMutation = useMutation({
     mutationFn: async (orderId: string) => {
-      // Get order items
-      const { data: items } = await supabase
-        .from("purchase_order_items")
-        .select("*")
-        .eq("purchase_order_id", orderId);
+      // Find the order
+      const order = purchaseOrders?.find(o => o.$id === orderId);
+      if (!order) throw new Error("Order not found");
 
-      if (!items) throw new Error("No items found");
-
-      // Update stock for each product
-      for (const item of items) {
-        const { data: product } = await supabase
-          .from("products")
-          .select("current_stock")
-          .eq("id", item.product_id)
-          .single();
-
+      // Update stock for each product in the order
+      for (const item of order.items) {
+        const product = products?.find(p => p.$id === item.productId);
         if (product) {
-          await supabase
-            .from("products")
-            .update({
-              current_stock: product.current_stock + item.qty,
-            })
-            .eq("id", item.product_id);
+          await updateProductStock(item.productId, product.currentStock + item.quantity);
         }
       }
 
       // Update order status
-      const { error } = await supabase
-        .from("purchase_orders")
-        .update({
-          status: "received",
-          received_at: new Date().toISOString(),
-        })
-        .eq("id", orderId);
-
-      if (error) throw error;
+      await updatePurchaseOrderStatus(orderId, 'received');
     },
     onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ["purchase-orders"] });
-      queryClient.invalidateQueries({ queryKey: ["products"] });
+      queryClient.invalidateQueries({ queryKey: ["purchase-orders", tenantId] });
+      queryClient.invalidateQueries({ queryKey: ["products", tenantId] });
       toast.success(t("inventory.poReceived"));
     },
     onError: () => {
@@ -76,7 +80,7 @@ export function PurchaseOrders() {
     },
   });
 
-  const handleEdit = (order: any) => {
+  const handleEdit = (order: PurchaseOrder) => {
     setEditingOrder(order);
     setIsDialogOpen(true);
   };
@@ -87,29 +91,34 @@ export function PurchaseOrders() {
 
   return (
     <div className="space-y-4">
-      <div className="flex justify-between items-center">
-        <h2 className="text-xl font-semibold">{t("inventory.purchaseOrders")}</h2>
+      <div className="flex flex-col sm:flex-row sm:justify-between sm:items-center gap-3">
+        <h2 className="text-lg sm:text-xl font-semibold">{t("inventory.purchaseOrders")}</h2>
         <div className="flex gap-2">
           <SupplierQuickAdd />
           <Button
+            size="sm"
             onClick={() => {
               setEditingOrder(null);
               setIsDialogOpen(true);
             }}
           >
-            <Plus className="h-4 w-4 mr-2" />
-            {t("inventory.createPurchaseOrder")}
+            <Plus className="h-4 w-4 sm:mr-2" />
+            <span className="hidden sm:inline">{t("inventory.createPurchaseOrder")}</span>
           </Button>
         </div>
       </div>
 
       {isLoading ? (
-        <p>{t("common.loading")}</p>
+        <div className="flex items-center justify-center py-12">
+          <RefreshCw className="h-6 w-6 animate-spin text-muted-foreground" />
+        </div>
       ) : purchaseOrders && purchaseOrders.length > 0 ? (
         <PurchaseOrdersTable
           orders={purchaseOrders}
+          suppliers={suppliers || []}
           onEdit={handleEdit}
           onMarkAsReceived={handleMarkAsReceived}
+          onUpdatePayment={(order) => setPaymentOrder(order)}
         />
       ) : (
         <div className="text-center py-12 text-muted-foreground">
@@ -122,6 +131,14 @@ export function PurchaseOrders() {
         onOpenChange={setIsDialogOpen}
         order={editingOrder}
       />
+
+      {/* Supplier Payment Modal (Records in Ledger + Updates PO) */}
+      <SupplierPaymentModal
+        open={!!paymentOrder}
+        onOpenChange={(open) => !open && setPaymentOrder(null)}
+        purchaseOrder={paymentOrder}
+      />
     </div>
   );
 }
+

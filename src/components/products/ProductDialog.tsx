@@ -44,6 +44,7 @@ const productSchema = z.object({
   categoryId: z.string().optional(),
   purchasePrice: z.string().min(1, "Purchase price is required"),
   sellingPrice: z.string().min(1, "Selling price is required"),
+  tradePrice: z.string().optional(),
   currentStock: z.string().min(1, "Current stock is required"),
   lowStockThreshold: z.string().optional(),
   unit: z.string().optional(),
@@ -81,6 +82,7 @@ export function ProductDialog({
       categoryId: "",
       purchasePrice: "0",
       sellingPrice: "0",
+      tradePrice: "0",
       currentStock: "0",
       lowStockThreshold: "10",
       unit: "pcs",
@@ -99,6 +101,7 @@ export function ProductDialog({
         categoryId: product.categoryId || "",
         purchasePrice: (product.purchasePrice || 0).toString(),
         sellingPrice: (product.sellingPrice || 0).toString(),
+        tradePrice: (product.tradePrice || 0).toString(),
         currentStock: product.currentStock.toString(),
         lowStockThreshold: (product.lowStockThreshold || 10).toString(),
         unit: product.unit || "pcs",
@@ -114,6 +117,7 @@ export function ProductDialog({
         categoryId: "",
         purchasePrice: "0",
         sellingPrice: "0",
+        tradePrice: "0",
         currentStock: "0",
         lowStockThreshold: "10",
         unit: "pcs",
@@ -133,6 +137,7 @@ export function ProductDialog({
         categoryId: data.categoryId || undefined,
         purchasePrice: parseFloat(data.purchasePrice),
         sellingPrice: parseFloat(data.sellingPrice),
+        tradePrice: parseFloat(data.tradePrice || "0"),
         currentStock: parseInt(data.currentStock),
         lowStockThreshold: data.lowStockThreshold ? parseInt(data.lowStockThreshold) : 10,
         unit: data.unit || "pcs",
@@ -270,6 +275,20 @@ export function ProductDialog({
                     <FormLabel>{t("products.sellingPrice")}*</FormLabel>
                     <FormControl>
                       <Input type="number" step="0.01" min="0" {...field} />
+                    </FormControl>
+                    <FormMessage />
+                  </FormItem>
+                )}
+              />
+
+              <FormField
+                control={form.control}
+                name="tradePrice"
+                render={({ field }) => (
+                  <FormItem>
+                    <FormLabel>{t("products.tradePrice", "Trade Price")}</FormLabel>
+                    <FormControl>
+                      <Input type="number" step="0.01" min="0" placeholder="Optional" {...field} />
                     </FormControl>
                     <FormMessage />
                   </FormItem>

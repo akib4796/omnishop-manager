@@ -104,7 +104,7 @@ export default function SysAdminLogin() {
                     <div className="flex justify-center mb-4">
                         <Shield className="h-12 w-12 text-purple-500" />
                     </div>
-                    <CardTitle className="text-3xl font-bold bg-gradient-to-r from-purple-400 to-blue-400 bg-clip-text text-transparent">
+                    <CardTitle className="text-2xl md:text-3xl font-bold bg-gradient-to-r from-purple-400 to-blue-400 bg-clip-text text-transparent">
                         SysAdmin Portal
                     </CardTitle>
                     <CardDescription>Platform Administrator Access</CardDescription>

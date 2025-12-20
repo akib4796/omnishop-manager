@@ -252,15 +252,15 @@ export default function TenantsManagement() {
 
     return (
         <div className="min-h-screen bg-gradient-to-br from-purple-50 via-background to-blue-50 dark:from-purple-950 dark:via-background dark:to-blue-950">
-            <div className="container mx-auto p-6">
+            <div className="container mx-auto p-4 md:p-6">
                 {/* Header */}
-                <div className="flex items-center justify-between mb-8">
+                <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4 mb-8">
                     <div className="flex items-center gap-4">
                         <Button variant="ghost" size="icon" onClick={() => navigate("/sysadmin/dashboard")}>
                             <ArrowLeft className="h-5 w-5" />
                         </Button>
                         <div>
-                            <h1 className="text-3xl font-bold bg-gradient-to-r from-purple-600 to-blue-600 bg-clip-text text-transparent">
+                            <h1 className="text-xl md:text-3xl font-bold bg-gradient-to-r from-purple-600 to-blue-600 bg-clip-text text-transparent">
                                 Tenant Management
                             </h1>
                             <p className="text-muted-foreground">Manage all shops and businesses</p>
@@ -522,66 +522,68 @@ export default function TenantsManagement() {
                                 <p className="text-sm">Create your first tenant to get started</p>
                             </div>
                         ) : (
-                            <Table>
-                                <TableHeader>
-                                    <TableRow>
-                                        <TableHead>Business Name</TableHead>
-                                        <TableHead>Type</TableHead>
-                                        <TableHead>Status</TableHead>
-                                        <TableHead>Plan</TableHead>
-                                        <TableHead>Max Users</TableHead>
-                                        <TableHead>Created</TableHead>
-                                        <TableHead className="text-right">Actions</TableHead>
-                                    </TableRow>
-                                </TableHeader>
-                                <TableBody>
-                                    {tenants.map((tenant) => (
-                                        <TableRow key={tenant.$id}>
-                                            <TableCell className="font-medium">{tenant.businessName}</TableCell>
-                                            <TableCell>{tenant.businessType || 'N/A'}</TableCell>
-                                            <TableCell>{getStatusBadge(tenant.status)}</TableCell>
-                                            <TableCell>{getPlanBadge(tenant.subscriptionPlan)}</TableCell>
-                                            <TableCell>{tenant.maxUsers || 5}</TableCell>
-                                            <TableCell>{new Date(tenant.$createdAt).toLocaleDateString()}</TableCell>
-                                            <TableCell className="text-right">
-                                                <DropdownMenu>
-                                                    <DropdownMenuTrigger asChild>
-                                                        <Button variant="ghost" size="icon">
-                                                            <MoreHorizontal className="h-4 w-4" />
-                                                        </Button>
-                                                    </DropdownMenuTrigger>
-                                                    <DropdownMenuContent align="end">
-                                                        <DropdownMenuLabel>Actions</DropdownMenuLabel>
-                                                        <DropdownMenuSeparator />
-                                                        <DropdownMenuItem onClick={() => handleEdit(tenant)}>
-                                                            <Edit className="mr-2 h-4 w-4 text-blue-500" />
-                                                            Edit
-                                                        </DropdownMenuItem>
-                                                        {tenant.status === 'suspended' ? (
-                                                            <DropdownMenuItem onClick={() => handleStatusChange(tenant.$id, 'active')}>
-                                                                <CheckCircle className="mr-2 h-4 w-4 text-green-500" />
-                                                                Activate
-                                                            </DropdownMenuItem>
-                                                        ) : (
-                                                            <DropdownMenuItem onClick={() => handleStatusChange(tenant.$id, 'suspended')}>
-                                                                <Ban className="mr-2 h-4 w-4 text-yellow-500" />
-                                                                Suspend
-                                                            </DropdownMenuItem>
-                                                        )}
-                                                        <DropdownMenuItem
-                                                            className="text-red-600"
-                                                            onClick={() => handleDelete(tenant.$id)}
-                                                        >
-                                                            <Trash className="mr-2 h-4 w-4" />
-                                                            Delete
-                                                        </DropdownMenuItem>
-                                                    </DropdownMenuContent>
-                                                </DropdownMenu>
-                                            </TableCell>
+                            <div className="overflow-x-auto">
+                                <Table>
+                                    <TableHeader>
+                                        <TableRow>
+                                            <TableHead>Business Name</TableHead>
+                                            <TableHead>Type</TableHead>
+                                            <TableHead>Status</TableHead>
+                                            <TableHead>Plan</TableHead>
+                                            <TableHead>Max Users</TableHead>
+                                            <TableHead>Created</TableHead>
+                                            <TableHead className="text-right">Actions</TableHead>
                                         </TableRow>
-                                    ))}
-                                </TableBody>
-                            </Table>
+                                    </TableHeader>
+                                    <TableBody>
+                                        {tenants.map((tenant) => (
+                                            <TableRow key={tenant.$id}>
+                                                <TableCell className="font-medium">{tenant.businessName}</TableCell>
+                                                <TableCell>{tenant.businessType || 'N/A'}</TableCell>
+                                                <TableCell>{getStatusBadge(tenant.status)}</TableCell>
+                                                <TableCell>{getPlanBadge(tenant.subscriptionPlan)}</TableCell>
+                                                <TableCell>{tenant.maxUsers || 5}</TableCell>
+                                                <TableCell>{new Date(tenant.$createdAt).toLocaleDateString()}</TableCell>
+                                                <TableCell className="text-right">
+                                                    <DropdownMenu>
+                                                        <DropdownMenuTrigger asChild>
+                                                            <Button variant="ghost" size="icon">
+                                                                <MoreHorizontal className="h-4 w-4" />
+                                                            </Button>
+                                                        </DropdownMenuTrigger>
+                                                        <DropdownMenuContent align="end">
+                                                            <DropdownMenuLabel>Actions</DropdownMenuLabel>
+                                                            <DropdownMenuSeparator />
+                                                            <DropdownMenuItem onClick={() => handleEdit(tenant)}>
+                                                                <Edit className="mr-2 h-4 w-4 text-blue-500" />
+                                                                Edit
+                                                            </DropdownMenuItem>
+                                                            {tenant.status === 'suspended' ? (
+                                                                <DropdownMenuItem onClick={() => handleStatusChange(tenant.$id, 'active')}>
+                                                                    <CheckCircle className="mr-2 h-4 w-4 text-green-500" />
+                                                                    Activate
+                                                                </DropdownMenuItem>
+                                                            ) : (
+                                                                <DropdownMenuItem onClick={() => handleStatusChange(tenant.$id, 'suspended')}>
+                                                                    <Ban className="mr-2 h-4 w-4 text-yellow-500" />
+                                                                    Suspend
+                                                                </DropdownMenuItem>
+                                                            )}
+                                                            <DropdownMenuItem
+                                                                className="text-red-600"
+                                                                onClick={() => handleDelete(tenant.$id)}
+                                                            >
+                                                                <Trash className="mr-2 h-4 w-4" />
+                                                                Delete
+                                                            </DropdownMenuItem>
+                                                        </DropdownMenuContent>
+                                                    </DropdownMenu>
+                                                </TableCell>
+                                            </TableRow>
+                                        ))}
+                                    </TableBody>
+                                </Table>
+                            </div>
                         )}
                     </CardContent>
                 </Card>

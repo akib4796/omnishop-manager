@@ -11,6 +11,7 @@ import { toast } from "sonner";
 import { account } from "@/integrations/appwrite";
 import { getProductById, updateProductStock } from "@/integrations/appwrite/products";
 import { createPendingSale, SaleData } from "@/integrations/appwrite/sales";
+import { createPayment, getEntityBalance } from "@/integrations/appwrite/payments";
 import { savePendingSale } from "@/lib/offline-db";
 import { syncManager } from "@/lib/sync-manager";
 import { toBengaliNumerals } from "@/lib/i18n-utils";
@@ -49,6 +50,7 @@ export default function PaymentPanel({
 }: PaymentPanelProps) {
   const { t, i18n } = useTranslation();
   const [processing, setProcessing] = useState(false);
+  const [customerBalance, setCustomerBalance] = useState<number | null>(null);
   const { profile } = useAuth();
   const tenantId = profile?.tenantId;
 
@@ -57,17 +59,47 @@ export default function PaymentPanel({
     return i18n.language === "bn" ? `৳${toBengaliNumerals(formatted)}` : `৳${formatted}`;
   };
 
+  // Fetch customer balance when selected
+  useState(() => {
+    if (selectedCustomer?.id && tenantId) {
+      getEntityBalance(tenantId, selectedCustomer.id, 'CUSTOMER')
+        .then(bal => setCustomerBalance(bal))
+        .catch(err => console.error("Failed to fetch balance", err));
+    } else {
+      setCustomerBalance(null);
+    }
+  }); // Using effect essentially
+
   const handlePayment = async (paymentMethod: string) => {
     if (cart.length === 0) return;
     if (processing) return;
     if (!tenantId) {
       toast.error("No tenant found");
+      toast.error("No tenant found");
       return;
+    }
+
+    // Credit Limit Check
+    if (paymentMethod === 'credit' && selectedCustomer?.creditLimit) {
+      const currentDebt = customerBalance || 0;
+      const newDebt = currentDebt + total;
+      const limit = selectedCustomer.creditLimit;
+
+      if (newDebt > limit) {
+        toast.error(
+          i18n.language === "bn"
+            ? `ক্রেডিট লিমিট অতিক্রম করেছে! (বর্তমান: ${limit}, নতুন: ${newDebt})`
+            : `Credit limit exceeded! (Limit: ${limit}, New Balance: ${newDebt})`
+        );
+        return; // Block sale
+      }
     }
 
     setProcessing(true);
 
     try {
+      console.log("[POS] handlePayment started - isOnline:", isOnline, "tenantId:", tenantId);
+
       const user = await account.get();
       if (!user) throw new Error("Not authenticated");
 
@@ -78,6 +110,7 @@ export default function PaymentPanel({
           productId: item.productId || item.product_id,
           quantity: item.quantity,
           price: item.price,
+          costPrice: item.purchasePrice || item.cost_price || 0, // For profit margin
         })),
         subtotal,
         discount,
@@ -89,7 +122,11 @@ export default function PaymentPanel({
         completedAt: new Date().toISOString(),
       };
 
+      console.log("[POS] saleData prepared, isOnline:", isOnline);
+
       if (isOnline) {
+        console.log("[POS] Online mode - saving to Appwrite...");
+
         // Create sale in Appwrite
         await createPendingSale({
           tenantId: tenantId,
@@ -97,6 +134,40 @@ export default function PaymentPanel({
           synced: true,
           syncedAt: new Date().toISOString(),
         });
+
+        console.log("[POS] Sale saved to pending_sales, now recording to ledger...");
+
+        // Record in Ledger (Payments Collection)
+        // This ensures Accounting module tracks the revenue/debt
+        try {
+          // Map POS payment methods to ledger wallet names
+          const getWalletMethod = (method: string) => {
+            switch (method) {
+              case 'cash': return 'Cash';
+              case 'card': return 'Bank Transfer';
+              case 'mobile': return 'Mobile Money';
+              case 'credit': return 'Credit'; // Customer owes - not a wallet
+              default: return 'Cash';
+            }
+          };
+
+          console.log("Recording sale to ledger:", { tenantId, type: 'IN', category: 'SALE', amount: total, method: getWalletMethod(paymentMethod) });
+
+          await createPayment({
+            tenantId,
+            type: 'IN',
+            category: 'SALE',
+            entityId: selectedCustomer?.id,
+            amount: total,
+            method: getWalletMethod(paymentMethod),
+          });
+
+          console.log("Successfully recorded sale to ledger!");
+        } catch (err: any) {
+          console.error("Failed to record ledger entry:", err);
+          // Show warning to user but don't block the sale
+          toast.warning(`Sale complete but ledger not updated: ${err.message || 'Unknown error'}`);
+        }
 
         // Update product stock on server
         for (const item of cart) {
@@ -188,6 +259,22 @@ export default function PaymentPanel({
               ))}
             </SelectContent>
           </Select>
+          {customerBalance !== null && (
+            <div className="mt-1 text-xs flex justify-between px-1">
+              <span className="text-slate-500">
+                {t("customers.balance") || "Balance"}:
+              </span>
+              <span className={customerBalance > 0 ? "text-red-500 font-medium" : "text-green-500"}>
+                ৳{customerBalance.toLocaleString()}
+              </span>
+            </div>
+          )}
+          {selectedCustomer?.creditLimit > 0 && (
+            <div className="text-xs flex justify-between px-1 text-slate-400">
+              <span>Credit Limit:</span>
+              <span>৳{selectedCustomer.creditLimit.toLocaleString()}</span>
+            </div>
+          )}
         </div>
 
         <Separator />
@@ -273,7 +360,7 @@ export default function PaymentPanel({
             </div>
           </Button>
         </div>
-      </div>
-    </Card>
+      </div >
+    </Card >
   );
 }

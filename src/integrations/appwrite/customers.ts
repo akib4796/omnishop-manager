@@ -19,6 +19,8 @@ export interface Customer {
     phone?: string;
     email?: string;
     address?: string;
+    priceTier?: 'retail' | 'wholesale' | 'dealer';
+    creditLimit?: number;
     tenantId: string;
     createdAt?: string;
     lastUpdatedAt?: string;
@@ -29,6 +31,8 @@ export interface CreateCustomerData {
     phone?: string;
     email?: string;
     address?: string;
+    priceTier?: 'retail' | 'wholesale' | 'dealer';
+    creditLimit?: number;
     tenantId: string;
 }
 
@@ -37,6 +41,8 @@ export interface UpdateCustomerData {
     phone?: string;
     email?: string;
     address?: string;
+    priceTier?: 'retail' | 'wholesale' | 'dealer';
+    creditLimit?: number;
 }
 
 // ============================================================================
@@ -63,6 +69,8 @@ export async function getCustomers(tenantId: string): Promise<Customer[]> {
         phone: doc.phone,
         email: doc.email,
         address: doc.address,
+        priceTier: doc.priceTier || 'retail',
+        creditLimit: doc.creditLimit || 0,
         tenantId: doc.tenantId,
         createdAt: doc.createdAt,
         lastUpdatedAt: doc.lastUpdatedAt,
@@ -86,6 +94,8 @@ export async function getCustomerById(customerId: string): Promise<Customer | nu
             phone: doc.phone,
             email: doc.email,
             address: doc.address,
+            priceTier: doc.priceTier || 'retail',
+            creditLimit: doc.creditLimit || 0,
             tenantId: doc.tenantId,
             createdAt: doc.createdAt,
             lastUpdatedAt: doc.lastUpdatedAt,
@@ -115,20 +125,21 @@ export async function searchCustomers(tenantId: string, query: string): Promise<
  * Create a new customer
  */
 export async function createCustomer(data: CreateCustomerData): Promise<Customer> {
-    const now = new Date().toISOString();
+    const customerId = ID.unique();
 
     const response = await databases.createDocument(
         DATABASE_ID,
         COLLECTION_ID,
-        ID.unique(),
+        customerId,
         {
+            customerId: customerId,
             name: data.name,
-            phone: data.phone ?? null,
+            phone: data.phone || '',  // Required field
             email: data.email ?? null,
             address: data.address ?? null,
+            priceTier: data.priceTier || 'retail',
+            creditLimit: data.creditLimit || 0,
             tenantId: data.tenantId,
-            createdAt: now,
-            lastUpdatedAt: now,
         }
     );
 
@@ -138,9 +149,11 @@ export async function createCustomer(data: CreateCustomerData): Promise<Customer
         phone: response.phone,
         email: response.email,
         address: response.address,
+        priceTier: response.priceTier,
+        creditLimit: response.creditLimit,
         tenantId: response.tenantId,
-        createdAt: response.createdAt,
-        lastUpdatedAt: response.lastUpdatedAt,
+        createdAt: response.$createdAt,
+        lastUpdatedAt: response.$updatedAt,
     };
 }
 
