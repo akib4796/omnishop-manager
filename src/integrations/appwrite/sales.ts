@@ -5,6 +5,7 @@
 
 import { ID, Query } from 'appwrite';
 import { databases } from './client';
+import { getEntityLedger } from './payments';
 
 const DATABASE_ID = 'omnishop_db';
 const COLLECTION_ID = 'pending_sales';
@@ -15,6 +16,7 @@ const COLLECTION_ID = 'pending_sales';
 
 export interface SaleItem {
     productId: string;
+    name?: string;  // Product name for display in receipt
     quantity: number;
     price: number;
     costPrice?: number; // Purchase price for profit margin calculation
@@ -23,6 +25,7 @@ export interface SaleItem {
 export interface SaleData {
     tenantId: string;
     customerId?: string | null;
+    customerName?: string;  // Added for display in sales history
     items: SaleItem[];
     subtotal: number;
     discount: number;
@@ -32,6 +35,7 @@ export interface SaleData {
     notes?: string;
     cashierId: string;
     completedAt: string;
+    amountPaid?: number; // Added to JSON blob
 }
 
 export interface PendingSale {
@@ -49,6 +53,7 @@ export interface CreatePendingSaleData {
     saleData: SaleData;
     synced?: boolean;
     syncedAt?: string;
+    amountPaid?: number;
 }
 
 // ============================================================================
@@ -67,8 +72,8 @@ export async function createPendingSale(data: CreatePendingSaleData): Promise<Pe
             tenantId: data.tenantId,
             saleData: JSON.stringify(data.saleData),
             synced: data.synced ?? false,
-            syncedAt: data.syncedAt ?? null,
-            createdAt: new Date().toISOString(),
+            // amountPaid: data.amountPaid || 0, <-- REMOVED due to schema limitation
+            // Use null for datetime fields when not set (Appwrite handles $createdAt automatically)
         }
     );
 
@@ -78,7 +83,8 @@ export async function createPendingSale(data: CreatePendingSaleData): Promise<Pe
         saleData: JSON.parse(response.saleData),
         synced: response.synced,
         syncedAt: response.syncedAt,
-        createdAt: response.createdAt,
+        createdAt: response.$createdAt,
+        amountPaid: response.amountPaid || 0,
     };
 }
 
@@ -92,6 +98,7 @@ export async function getPendingSales(tenantId: string): Promise<PendingSale[]> 
         [
             Query.equal('tenantId', tenantId),
             Query.orderDesc('createdAt'),
+            Query.limit(1000), // Increase limit to ensure we find all sales
         ]
     );
 
@@ -106,7 +113,7 @@ export async function getPendingSales(tenantId: string): Promise<PendingSale[]> 
         saleData: typeof doc.saleData === 'string' ? JSON.parse(doc.saleData) : doc.saleData,
         synced: doc.synced,
         syncedAt: doc.syncedAt,
-        createdAt: doc.createdAt,
+        createdAt: doc.$createdAt,
         amountPaid: doc.amountPaid || 0,  // Include amount paid for FIFO tracking
     }));
 }
@@ -131,7 +138,7 @@ export async function getUnsyncedSales(tenantId: string): Promise<PendingSale[]>
         saleData: typeof doc.saleData === 'string' ? JSON.parse(doc.saleData) : doc.saleData,
         synced: doc.synced,
         syncedAt: doc.syncedAt,
-        createdAt: doc.createdAt,
+        createdAt: doc.$createdAt,
         amountPaid: doc.amountPaid || 0,
     }));
 }
@@ -212,11 +219,54 @@ export async function getSalesInRange(
  * Get sales for a specific customer
  * Returns full sale data including items, total, payment method
  */
-export async function getCustomerSales(tenantId: string, customerId: string): Promise<PendingSale[]> {
+export async function getCustomerSales(
+    tenantId: string,
+    customerId: string,
+    matchedSaleIds?: string[],
+    fuzzyTransactions?: any[]
+): Promise<PendingSale[]> {
     const allSales = await getPendingSales(tenantId);
 
-    // Filter sales that belong to this customer
-    return allSales.filter(sale => sale.saleData.customerId === customerId);
+    console.log('[DEBUG] getCustomerSales', {
+        customerId,
+        matchedSaleIds,
+        fuzzyTransactionsCount: fuzzyTransactions?.length,
+        totalSales: allSales.length
+    });
+
+    // Filter sales that belong to this customer OR match the provided sale IDs
+    const filtered = allSales.filter(sale => {
+        // 1. match by ID explicitly (from ledger)
+        if (matchedSaleIds && matchedSaleIds.includes(sale.$id)) return true;
+
+        // 2. match by valid customerId in saleData
+        if (sale.saleData.customerId === customerId) return true;
+
+        // 3. Fuzzy match: try to link orphan transactions
+        if (fuzzyTransactions && fuzzyTransactions.length > 0) {
+            // Find a transaction that matches amount (exact) and time (approx)
+            const match = fuzzyTransactions.find(t => {
+                // If transaction already has a ref ID, ignore fuzzy match for it (it should have matched step 1 if valid)
+                if (t.referenceId) return false;
+
+                // Match amount exactly (float safe comparison)
+                if (Math.abs(t.amount - sale.saleData.total) > 0.05) return false;
+
+                // Match time (within 5 minutes due to potential clock skew or processing delay)
+                const txTime = new Date(t.date).getTime();
+                const saleTime = new Date(sale.createdAt).getTime();
+                const diffMs = Math.abs(txTime - saleTime);
+                return diffMs < 5 * 60 * 1000;
+            });
+
+            if (match) return true;
+        }
+
+        return false;
+    });
+
+    console.log('[DEBUG] filtered sales', { count: filtered.length });
+    return filtered;
 }
 
 /**
@@ -306,4 +356,35 @@ export async function allocatePaymentToSales(
     }
 
     return allocations;
+}
+
+/**
+ * Get customer sales statistics (total spent, last visit)
+ */
+export async function getCustomerSalesStats(
+    tenantId: string,
+    customerId: string
+): Promise<{ totalSpent: number; lastVisit: Date | null; salesCount: number }> {
+    try {
+        // Use Ledger as source of truth for customer stats
+        const transactions = await getEntityLedger(tenantId, customerId);
+
+        // Filter for SALES only
+        const sales = transactions.filter(t => t.category === 'SALE');
+
+        if (sales.length === 0) {
+            return { totalSpent: 0, lastVisit: null, salesCount: 0 };
+        }
+
+        // Calculate total spent (sum of all sales regardless of payment status)
+        const totalSpent = sales.reduce((sum, sale) => sum + sale.amount, 0);
+
+        // Get last visit date (transactions are already sorted descendant by getEntityLedger)
+        const lastVisit = sales[0] ? new Date(sales[0].date) : null;
+
+        return { totalSpent, lastVisit, salesCount: sales.length };
+    } catch (error) {
+        console.error('Error getting customer sales stats:', error);
+        return { totalSpent: 0, lastVisit: null, salesCount: 0 };
+    }
 }

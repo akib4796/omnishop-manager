@@ -63,10 +63,20 @@ export function CustomerDetailsModal({
         enabled: open && !!customer && !!tenantId,
     });
 
+    console.log('[DEBUG] Customer Transactions:', transactions);
+
+    // Extract sale IDs from transactions to help find sales that might have missing customerIds in saleData
+    const matchedSaleIds = useMemo(() => {
+        if (!transactions) return [];
+        return transactions
+            .filter((t: any) => t.category === 'SALE' && t.referenceId)
+            .map((t: any) => t.referenceId);
+    }, [transactions]);
+
     // Fetch customer sales with item details
     const { data: sales, isLoading: loadingSales } = useQuery({
-        queryKey: ["customerSales", tenantId, customer?.$id],
-        queryFn: () => customer ? getCustomerSales(tenantId, customer.$id) : Promise.resolve([]),
+        queryKey: ["customerSales", tenantId, customer?.$id, matchedSaleIds, transactions],
+        queryFn: () => customer ? getCustomerSales(tenantId, customer.$id, matchedSaleIds, transactions) : Promise.resolve([]),
         enabled: open && !!customer && !!tenantId,
     });
 

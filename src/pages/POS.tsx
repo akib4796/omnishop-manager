@@ -465,7 +465,7 @@ export default function POS() {
 
       const quoteString = await createQuotation({
         tenantId,
-        customerId: selectedCustomer?.id,
+        customerId: selectedCustomer?.$id || selectedCustomer?.id,
         customerName: customerName,
         customerPhone: selectedCustomer?.phone,
         items: cart.map(item => ({
@@ -688,31 +688,54 @@ export default function POS() {
       const user = await account.get();
       if (!user) throw new Error("Not authenticated");
 
-      const saleData: SaleData = {
-        tenantId: tenantId,
-        customerId: selectedCustomer?.id || null,
-        items: cart.map(item => ({
-          productId: item.productId,
-          quantity: item.quantity,
-          price: item.price,
-        })),
-        subtotal,
-        discount,
-        tax: taxAmount,
-        total,
-        paymentMethod: paymentMethod,
-        notes,
-        cashierId: user.$id,
-        completedAt: new Date().toISOString(),
-      };
+      console.log('[POS] Checkout - Selected Customer:', selectedCustomer); // Debug log
+
+
 
       if (isOnline) {
+        // Calculate initial amount paid for the sale record
+        // This ensures the receipt shows the correct "Paid" amount immediately
+        const partialVal = parseFloat(partialAmountStr || '') || 0;
+        const isSplit = paymentMethod === 'credit' && partialVal > 0 && partialVal < total;
+
+        let initialAmountPaid = 0;
+        if (paymentMethod === 'credit') {
+          initialAmountPaid = isSplit ? partialVal : 0;
+        } else {
+          initialAmountPaid = total; // Fully paid
+        }
+
+        const saleData: SaleData = {
+          tenantId: tenantId,
+          customerId: selectedCustomer?.$id || selectedCustomer?.id || null,
+          customerName: selectedCustomer?.name || undefined,
+          items: cart.map(item => ({
+            productId: item.productId,
+            name: item.name,
+            quantity: item.quantity,
+            price: item.price,
+          })),
+          subtotal,
+          discount,
+          tax: taxAmount,
+          total,
+          paymentMethod: paymentMethod,
+          notes,
+          cashierId: user.$id,
+          completedAt: new Date().toISOString(),
+          // Embed amountPaid in the JSON data to avoid schema issues
+          amountPaid: initialAmountPaid
+        };
+
+        console.log('[POS] Creating sale with amountPaid:', initialAmountPaid);
+
         // Create sale in Appwrite
-        await createPendingSale({
+        const pendingSale = await createPendingSale({
           tenantId: tenantId,
           saleData: saleData,
           synced: true,
           syncedAt: new Date().toISOString(),
+          amountPaid: initialAmountPaid,
         });
 
         // ====== RECORD IN LEDGER (for Cashbook/Accounting) ======
@@ -740,7 +763,7 @@ export default function POS() {
             partialMethod,
             total,
             isPartialPayment,
-            selectedCustomerId: selectedCustomer?.id
+            selectedCustomerId: selectedCustomer?.$id || selectedCustomer?.id
           });
 
           if (isPartialPayment) {
@@ -759,9 +782,10 @@ export default function POS() {
               tenantId,
               type: 'IN',
               category: 'SALE',
-              entityId: selectedCustomer?.id,
+              entityId: selectedCustomer?.$id || selectedCustomer?.id,
               amount: partialAmount,
               method: getWalletMethod(partialMethod || 'cash'),
+              referenceId: pendingSale.$id, // Link to sale
             });
             await updateWalletBalance(tenantId, getWalletMethod(partialMethod || 'cash'), partialAmount, 'IN');
 
@@ -771,14 +795,16 @@ export default function POS() {
             }
 
             // Entry 2: Credit portion (goes to customer balance)
-            await createPayment({
+            const creditPayment = await createPayment({
               tenantId,
               type: 'IN',
               category: 'SALE',
-              entityId: selectedCustomer?.id,
+              entityId: selectedCustomer?.$id || selectedCustomer?.id,
               amount: creditAmount,
               method: 'Credit',
+              referenceId: pendingSale.$id, // Link to sale
             });
+            console.log('[POS] Credit payment created:', creditPayment);
 
             console.log('[POS] Split payment recorded: ৳' + partialAmount + ' paid, ৳' + creditAmount + ' on credit');
 
@@ -786,14 +812,16 @@ export default function POS() {
             // SINGLE PAYMENT METHOD
             console.log('[POS] Recording sale to ledger:', { tenantId, type: 'IN', category: 'SALE', amount: total, method: paymentMethod });
 
-            await createPayment({
+            const payment = await createPayment({
               tenantId,
               type: 'IN',
               category: 'SALE',
-              entityId: selectedCustomer?.id,
+              entityId: selectedCustomer?.$id || selectedCustomer?.id,
               amount: total,
               method: getWalletMethod(paymentMethod),
+              referenceId: pendingSale.$id, // Link to sale
             });
+            console.log('[POS] Payment created:', payment);
 
             console.log('[POS] Sale recorded to ledger successfully!');
 
@@ -834,12 +862,23 @@ export default function POS() {
         }
         toast.success(t("pos.saleCompleted"));
       } else {
+        // Calculate amount paid for offline record
+        const partialVal = parseFloat(partialAmountStr || '') || 0;
+        const isSplit = paymentMethod === 'credit' && partialVal > 0 && partialVal < total;
+        let initialAmountPaid = 0;
+        if (paymentMethod === 'credit') {
+          initialAmountPaid = isSplit ? partialVal : 0;
+        } else {
+          initialAmountPaid = total;
+        }
+
         // Save to local IndexedDB for later sync
         await savePendingSale({
           id: crypto.randomUUID(),
           tenant_id: tenantId,
           sale_data: {
             ...saleData,
+            amountPaid: initialAmountPaid, // Add to JSON blob for offline too
             items: cart.map(item => ({
               product_id: item.productId,
               quantity: item.quantity,
@@ -847,6 +886,7 @@ export default function POS() {
             })),
           },
           created_at: new Date().toISOString(),
+          // amountPaid: initialAmountPaid, // Optional in local DB, but vital in saleData
         });
 
         // Update local stock
@@ -971,32 +1011,51 @@ export default function POS() {
           "bg-slate-800/90 border-l border-slate-700/50",
           "h-full overflow-hidden"
         )}>
-          {/* Cart Header */}
-          <div className="px-4 py-3 border-b border-slate-700/50 flex items-center justify-between shrink-0 bg-slate-700/50 backdrop-blur-sm">
+          {/* Cart Header with Hold/Quote Icons */}
+          <div className="px-3 py-2 border-b border-slate-700/50 flex items-center justify-between shrink-0 bg-slate-700/30">
             <div className="flex items-center gap-2">
-              <ShoppingCart className="h-5 w-5 text-indigo-400" />
-              <h2 className="text-lg font-bold">{t("pos.cart")}</h2>
+              <ShoppingCart className="h-4 w-4 text-indigo-400" />
+              <span className="font-bold text-sm">{t("pos.cart")}</span>
               {cart.length > 0 && (
-                <Badge className="bg-indigo-500/20 text-indigo-400 border-indigo-500/50">
+                <Badge className="bg-indigo-500/20 text-indigo-400 border-indigo-500/50 text-xs px-1.5 py-0">
                   {formatCount(itemCount)}
                 </Badge>
               )}
             </div>
-            {heldOrders.length > 0 && (
-              <Button
-                variant="outline"
-                size="sm"
-                className="h-8 bg-amber-500/10 border-amber-500/50 text-amber-400 hover:bg-amber-500/20"
-                onClick={() => {
-                  if (heldOrders.length > 0) {
-                    resumeOrder(heldOrders[heldOrders.length - 1]);
-                  }
-                }}
+            <div className="flex items-center gap-1">
+              {/* Held Orders Badge */}
+              {heldOrders.length > 0 && (
+                <button
+                  className="h-7 px-2 rounded bg-amber-500/20 text-amber-400 text-xs flex items-center gap-1 hover:bg-amber-500/30"
+                  onClick={() => {
+                    if (heldOrders.length > 0) {
+                      resumeOrder(heldOrders[heldOrders.length - 1]);
+                    }
+                  }}
+                >
+                  <Clock className="h-3 w-3" />
+                  {formatCount(heldOrders.length)}
+                </button>
+              )}
+              {/* Hold Icon */}
+              <button
+                className="h-7 w-7 rounded bg-amber-500/10 text-amber-400 flex items-center justify-center hover:bg-amber-500/20 disabled:opacity-50"
+                onClick={holdOrder}
+                disabled={cart.length === 0}
+                title="Hold Order"
               >
-                <Clock className="h-4 w-4 mr-1" />
-                {formatCount(heldOrders.length)}
-              </Button>
-            )}
+                <Pause className="h-3.5 w-3.5" />
+              </button>
+              {/* Quote Icon */}
+              <button
+                className="h-7 w-7 rounded bg-blue-500/10 text-blue-400 flex items-center justify-center hover:bg-blue-500/20 disabled:opacity-50"
+                onClick={handleSaveQuote}
+                disabled={cart.length === 0 || processing}
+                title="Save Quote"
+              >
+                <FileDown className="h-3.5 w-3.5" />
+              </button>
+            </div>
           </div>
 
           {/* Cart Items */}
@@ -1007,33 +1066,10 @@ export default function POS() {
             onNotesChange={setNotes}
           />
 
-          {/* Hold Order Button */}
-          <div className="px-4 py-2 border-t border-slate-700/50 shrink-0">
-            <Button
-              variant="outline"
-              className="w-full h-10 text-sm font-medium rounded-lg bg-amber-500/10 border-amber-500/50 text-amber-400 hover:bg-amber-500/20"
-              onClick={holdOrder}
-              disabled={cart.length === 0}
-            >
-              <Pause className="h-4 w-4 mr-2" />
-              {t("pos.holdOrder")}
-            </Button>
-
-            <Button
-              variant="outline"
-              className="w-full h-10 text-sm font-medium rounded-lg bg-blue-500/10 border-blue-500/50 text-blue-400 hover:bg-blue-500/20 mt-2"
-              onClick={handleSaveQuote}
-              disabled={cart.length === 0 || processing}
-            >
-              <FileDown className="h-4 w-4 mr-2" />
-              {t("pos.saveQuote", "Save Quote")}
-            </Button>
-          </div>
-
-          {/* GLASSY PAYMENT PANEL - Sticky at Bottom */}
-          <div className="px-3 py-3 space-y-3 shrink-0 border-t border-slate-700/50 bg-slate-800/95 backdrop-blur-xl">
-            {/* Customer Selector - Frosted Glass */}
-            <div className="backdrop-blur-xl bg-white/5 rounded-2xl border border-white/10 p-3 space-y-2">
+          {/* COMPACT PAYMENT PANEL */}
+          <div className="px-2 py-2 space-y-2 shrink-0 border-t border-slate-700/50 bg-slate-800/95">
+            {/* Customer Selector */}
+            <div className="bg-slate-700/30 rounded-lg border border-slate-600/30 p-2 space-y-1">
               <div className="flex items-center justify-between">
                 <label className="text-xs font-medium text-slate-400 uppercase tracking-wide">
                   {t("pos.customer")}

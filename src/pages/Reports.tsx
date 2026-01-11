@@ -23,6 +23,7 @@ import { SalesTrendChart, CategoryPieChart, HourlySalesChart, TopProductsTable }
 import { AgingReport } from "@/components/reports/AgingReport";
 import { SupplierAgingReport } from "@/components/reports/SupplierAgingReport";
 import { getSuppliers } from "@/integrations/appwrite/inventory";
+import { SalesReportByDocumentTable } from "@/components/reports/SalesReportByDocumentTable";
 
 // Helper for date formatting
 const formatDate = (dateString: string, language: string) => {
@@ -427,6 +428,7 @@ function ReportsContent() {
               <TabsTrigger value="sales" className="text-xs md:text-sm">Sales</TabsTrigger>
               <TabsTrigger value="inventory" className="text-xs md:text-sm">Inventory</TabsTrigger>
               <TabsTrigger value="operations" className="text-xs md:text-sm">Finance</TabsTrigger>
+              <TabsTrigger value="documents" className="text-xs md:text-sm">Documents</TabsTrigger>
               <TabsTrigger value="sync" className="text-xs md:text-sm">Sync {pendingSales.length > 0 && `(${pendingSales.length})`}</TabsTrigger>
             </TabsList>
 
@@ -721,6 +723,11 @@ function ReportsContent() {
                   ))}
                 </div>
               )}
+            </TabsContent>
+
+            {/* Sales Report By Document */}
+            <TabsContent value="documents" className="space-y-4">
+              <SalesReportByDocumentTable sales={sales} staffMembers={staffMembers} />
             </TabsContent>
           </Tabs>
         </div>

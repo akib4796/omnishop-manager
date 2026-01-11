@@ -111,6 +111,7 @@ export class SyncManager {
           saleData: sale.sale_data,
           synced: true,
           syncedAt: new Date().toISOString(),
+          amountPaid: sale.amountPaid, // Added
         });
 
         // Update product stock on server

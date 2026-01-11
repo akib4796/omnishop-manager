@@ -10,6 +10,7 @@ import { Plus, Search, Download, Loader2 } from "lucide-react";
 import { toast } from "sonner";
 import { ProductDialog } from "@/components/products/ProductDialog";
 import { ProductsTable } from "@/components/products/ProductsTable";
+import { ImportProductDialog } from "@/components/products/ImportProductDialog";
 import { CategoryQuickAdd } from "@/components/products/CategoryQuickAdd";
 import {
   Select,
@@ -186,6 +187,14 @@ export default function Products() {
               )}
             </div>
             <div className="flex gap-2">
+              <ImportProductDialog
+                tenantId={tenantId}
+                categories={categories || []}
+                onSuccess={() => {
+                  queryClient.invalidateQueries({ queryKey: ["products"] });
+                  queryClient.invalidateQueries({ queryKey: ["categories"] });
+                }}
+              />
               <Button variant="outline" onClick={handleExportCSV}>
                 <Download className="h-4 w-4 mr-2" />
                 <span className="hidden sm:inline">{t("products.exportCSV")}</span>

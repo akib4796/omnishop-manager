@@ -21,6 +21,7 @@ interface OfflineDB extends DBSchema {
       sale_data: any;
       created_at: string;
       synced: boolean;
+      amountPaid?: number; // Added
     };
   };
   metadata: {
@@ -34,7 +35,6 @@ interface OfflineDB extends DBSchema {
 }
 
 let db: IDBPDatabase<OfflineDB> | null = null;
-
 export async function initOfflineDB() {
   if (db) return db;
 
@@ -115,6 +115,7 @@ export async function savePendingSale(sale: {
   tenant_id: string;
   sale_data: any;
   created_at: string;
+  amountPaid?: number; // Added
 }) {
   const database = await initOfflineDB();
   await database.put('pendingSales', {

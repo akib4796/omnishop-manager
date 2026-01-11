@@ -25,6 +25,7 @@ import {
 } from "@/components/ui/dialog";
 import { useAuth } from "@/hooks/useAuth";
 import { getCompletedSales, CompletedSale } from "@/integrations/appwrite/salesHistory";
+import { getProducts } from "@/integrations/appwrite/products";
 
 export default function SalesHistory() {
   const { t, i18n } = useTranslation();
@@ -40,6 +41,15 @@ export default function SalesHistory() {
     queryFn: async () => {
       if (!tenantId) return [];
       return getCompletedSales(tenantId);
+    },
+    enabled: !!tenantId,
+  });
+
+  const { data: products } = useQuery({
+    queryKey: ["products", tenantId],
+    queryFn: async () => {
+      if (!tenantId) return [];
+      return getProducts(tenantId);
     },
     enabled: !!tenantId,
   });
@@ -219,7 +229,9 @@ export default function SalesHistory() {
                     {selectedSale.items.map((item, idx) => (
                       <div key={idx} className="flex justify-between text-sm mb-2">
                         <span>
-                          {item.name} x {item.qty}
+                          {item.name && item.name !== 'Unknown'
+                            ? item.name
+                            : (products?.find(p => p.$id === item.productId)?.name || 'Unknown Item')} x {item.qty}
                         </span>
                         <span>{formatCurrency(item.price * item.qty, i18n.language)}</span>
                       </div>
@@ -246,6 +258,20 @@ export default function SalesHistory() {
                       <span>{t("common.total")}:</span>
                       <span>{formatCurrency(selectedSale.totalAmount, i18n.language)}</span>
                     </div>
+
+                    {/* Show Paid/Due for Credit Sales */}
+                    {selectedSale.paymentMethod === 'credit' && (
+                      <div className="pt-2 mt-2 border-t border-dashed">
+                        <div className="flex justify-between text-green-600">
+                          <span>{i18n.language === 'bn' ? 'জমা' : 'Paid'}:</span>
+                          <span>{formatCurrency(selectedSale.amountPaid || 0, i18n.language)}</span>
+                        </div>
+                        <div className="flex justify-between text-amber-600 font-medium">
+                          <span>{i18n.language === 'bn' ? 'বাকি' : 'Due'}:</span>
+                          <span>{formatCurrency(Math.max(0, selectedSale.totalAmount - (selectedSale.amountPaid || 0)), i18n.language)}</span>
+                        </div>
+                      </div>
+                    )}
                   </div>
                   <Button onClick={handlePrintReceipt} className="w-full">
                     {t("pos.printReceipt")}

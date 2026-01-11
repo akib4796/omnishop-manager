@@ -40,6 +40,7 @@ import {
   deleteCustomer,
   Customer
 } from "@/integrations/appwrite/customers";
+import { getCustomerSalesStats } from "@/integrations/appwrite/sales";
 import { CustomerDetailsModal } from "@/components/customers/CustomerDetailsModal";
 
 export default function Customers() {
@@ -145,9 +146,27 @@ export default function Customers() {
       c.phone?.toLowerCase().includes(searchQuery.toLowerCase())
   );
 
-  // Placeholder for customer stats - would need actual sales data
-  const getCustomerStats = (_customerId: string) => {
-    return { totalSpent: 0, lastVisit: null as Date | null };
+  // Query for all customer stats
+  const { data: customerStatsMap } = useQuery({
+    queryKey: ["customerStats", tenantId, customers?.map(c => c.$id).join(',')],
+    queryFn: async () => {
+      if (!tenantId || !customers || customers.length === 0) return {};
+      const statsMap: Record<string, { totalSpent: number; lastVisit: Date | null; salesCount: number }> = {};
+      // Fetch stats for each customer
+      await Promise.all(
+        customers.map(async (customer) => {
+          const stats = await getCustomerSalesStats(tenantId, customer.$id);
+          statsMap[customer.$id] = stats;
+        })
+      );
+      return statsMap;
+    },
+    enabled: !!tenantId && !!customers && customers.length > 0,
+  });
+
+  // Get stats for a customer
+  const getCustomerStats = (customerId: string) => {
+    return customerStatsMap?.[customerId] || { totalSpent: 0, lastVisit: null, salesCount: 0 };
   };
 
   if (authLoading || !tenantId) {

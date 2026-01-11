@@ -7,7 +7,7 @@ import { Query } from 'appwrite';
 import { databases } from './client';
 
 const DATABASE_ID = 'omnishop_db';
-const COLLECTION_ID = 'sales';
+const COLLECTION_ID = 'pending_sales'; // Read from pending_sales since that's where POS creates them
 
 // ============================================================================
 // Types
@@ -30,11 +30,13 @@ export interface CompletedSale {
     discountAmount: number;
     taxAmount: number;
     totalAmount: number;
+    amountPaid: number; // Added field
     paymentMethod: string;
     cashierId: string;
     cashierName?: string;
     createdAt: string;
 }
+
 
 // ============================================================================
 // Queries
@@ -50,36 +52,49 @@ export async function getCompletedSales(tenantId: string): Promise<CompletedSale
             COLLECTION_ID,
             [
                 Query.equal('tenantId', tenantId),
-                Query.orderDesc('createdAt'),
+                Query.orderDesc('$createdAt'),
                 Query.limit(500),
             ]
         );
 
         return response.documents.map((doc: any) => {
-            // Parse items if stored as JSON string
-            let items = doc.items;
-            if (typeof items === 'string') {
+            // Parse saleData JSON from pending_sales
+            let saleData: any = {};
+            if (typeof doc.saleData === 'string') {
                 try {
-                    items = JSON.parse(items);
+                    saleData = JSON.parse(doc.saleData);
                 } catch {
-                    items = [];
+                    saleData = {};
                 }
+            } else if (doc.saleData) {
+                saleData = doc.saleData;
             }
+
+            // Map items from saleData
+            const items = (saleData.items || []).map((item: any) => ({
+                productId: item.productId,
+                name: item.name || 'Unknown',
+                qty: item.quantity || item.qty || 0,
+                price: item.price || 0,
+            }));
 
             return {
                 $id: doc.$id,
                 tenantId: doc.tenantId,
-                customerId: doc.customerId,
-                customerName: doc.customerName,
+                customerId: saleData.customerId,
+                customerName: saleData.customerName,
                 items,
-                subtotal: doc.subtotal || 0,
-                discountAmount: doc.discountAmount || 0,
-                taxAmount: doc.taxAmount || 0,
-                totalAmount: doc.totalAmount || 0,
-                paymentMethod: doc.paymentMethod,
-                cashierId: doc.cashierId,
-                cashierName: doc.cashierName,
-                createdAt: doc.createdAt || doc.$createdAt,
+                subtotal: saleData.subtotal || 0,
+                discountAmount: saleData.discount || 0,
+                taxAmount: saleData.tax || 0,
+                totalAmount: saleData.total || 0,
+                taxAmount: saleData.tax || 0,
+                totalAmount: saleData.total || 0,
+                amountPaid: saleData.amountPaid || doc.amountPaid || 0,
+                paymentMethod: saleData.paymentMethod || 'cash',
+                cashierId: saleData.cashierId || '',
+                cashierName: saleData.cashierName,
+                createdAt: doc.$createdAt,
             };
         });
     } catch (error) {
@@ -130,6 +145,7 @@ export async function getCompletedSalesInRange(
                 discountAmount: doc.discountAmount || 0,
                 taxAmount: doc.taxAmount || 0,
                 totalAmount: doc.totalAmount || 0,
+                amountPaid: doc.amountPaid || 0,
                 paymentMethod: doc.paymentMethod,
                 cashierId: doc.cashierId,
                 cashierName: doc.cashierName,
@@ -172,6 +188,7 @@ export async function getCompletedSaleById(saleId: string): Promise<CompletedSal
             discountAmount: (doc.discountAmount || 0) as number,
             taxAmount: (doc.taxAmount || 0) as number,
             totalAmount: (doc.totalAmount || 0) as number,
+            amountPaid: (doc.amountPaid || 0) as number,
             paymentMethod: doc.paymentMethod as string,
             cashierId: doc.cashierId as string,
             cashierName: doc.cashierName as string | undefined,
